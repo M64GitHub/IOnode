@@ -386,12 +386,9 @@ You: "now set gpio 1 to high please!"
 OpenClaw: GPIO 1 is now high. ⚡
 ```
 
-OpenClaw understands the design split naturally:
 
-> *[WireClaw](https://wireclaw.io) = AI reasoning loop on the chip, local rules engine, self-contained*
-> *IOnode = dumb but fast, all automation logic lives here with me*
-
-Same `.hal.` protocol means OpenClaw talks to both interchangeably with the same commands.
+> For *[WireClaw](https://wireclaw.io) users (AI reasoning loop on the chip, local rules engine, self-contained*)  
+> Same `.hal.` protocol means OpenClaw talks to both interchangeably with the same commands.
 
 ### Install the IOnode Skill
 
