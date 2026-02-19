@@ -101,6 +101,7 @@ All registered devices with kind-appropriate controls:
 | `serial_text` | Last received UART line |
 | `digital_out`, `relay` | ON / OFF toggle buttons |
 | `pwm` | Slider 0–255 with live value display |
+| `rgb_led` | Color picker + hex display + OFF button |
 
 An **Add Device** form at the top lets you register new sensors and actuators without editing JSON. Fields adapt to the selected kind - relay shows an Inverted checkbox, serial_text shows a Baud Rate field instead of a pin number.
 
@@ -128,6 +129,7 @@ All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are 
 | `{name}.hal.gpio.{pin}.set` | `0` or `1` | `ok` | Sets pin to OUTPUT, writes |
 | `{name}.hal.adc.{pin}.read` | - | `0`-`4095` | 12-bit raw ADC |
 | `{name}.hal.pwm.{pin}.set` | `0`-`255` | `ok` | 8-bit PWM output |
+| `{name}.hal.pwm.{pin}.get` | - | `0`-`255` | Last written PWM value (cached) |
 | `{name}.hal.dac.*` | - | error | Not available on C3/C6/S3 |
 | `{name}.hal.uart.read` | - | last line | Requires a `serial_text` device |
 | `{name}.hal.uart.write` | text | `ok` | Requires a `serial_text` device |
@@ -179,7 +181,7 @@ Capabilities response:
 
 ## Registering Sensors & Actuators
 
-Edit `data/devices.json` and upload with `pio run -t uploadfs`. Or let `devicesInit()` auto-register the built-ins (chip_temp, clock_hour, clock_minute, clock_hhmm) on first boot.
+Edit `data/devices.json` and upload with `pio run -t uploadfs`. Or let `devicesInit()` auto-register the built-ins (chip_temp, clock_hour, clock_minute, clock_hhmm, rgb_led) on first boot. The `rgb_led` device is only registered on boards with a built-in RGB LED (ESP32-C6, S3, C3).
 
 ### devices.json format
 
@@ -213,6 +215,7 @@ Fields: `n`=name, `k`=kind, `p`=pin (255=virtual), `u`=unit, `i`=inverted, `ns`=
 | `digital_out` | actuator | `digitalWrite(pin, val)` |
 | `relay` | actuator | `digitalWrite` with optional inversion |
 | `pwm` | actuator | `analogWrite(pin, 0-255)` |
+| `rgb_led` | actuator | Built-in RGB LED, packed `0xRRGGBB` value |
 
 Once registered, every device is automatically available via NATS:
 
@@ -462,11 +465,13 @@ IOnode/
 |   +-- version.h           IONODE_VERSION
 |   +-- devices.h           Device registry structs & API
 |   +-- nats_hal.h          HAL NATS handler
+|   +-- web_config.h        Web UI server
 |   +-- setup_portal.h      Config portal
 +-- src/
 |   +-- main.cpp            Setup, loop, NATS, serial commands
 |   +-- devices.cpp         Registry, sensor reading, persistence
 |   +-- nats_hal.cpp        HAL request router (gpio/adc/pwm/uart/system)
+|   +-- web_config.cpp      Web UI server + REST API + PROGMEM HTML/JS
 |   +-- setup_portal.cpp    WiFi AP + captive portal + config form
 +-- lib/nats/               nats_atoms - embedded NATS client library
 +-- data/

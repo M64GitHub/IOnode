@@ -50,7 +50,10 @@ scripts/ion.sh gpio ionode-01 4 set 1
 scripts/ion.sh adc ionode-01 2
 
 # Set PWM output
-scripts/ion.sh pwm ionode-01 3 128
+scripts/ion.sh pwm ionode-01 3 set 128
+
+# Read back PWM value
+scripts/ion.sh pwm ionode-01 3 get
 
 # Query device capabilities
 scripts/ion.sh caps ionode-01

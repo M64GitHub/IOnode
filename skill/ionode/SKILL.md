@@ -54,7 +54,7 @@ scripts/ion.sh read <device> <sensor>          # read a registered sensor
 scripts/ion.sh set <device> <actuator> <value> # set a registered actuator
 scripts/ion.sh gpio <device> <pin> get|set [value]
 scripts/ion.sh adc <device> <pin>
-scripts/ion.sh pwm <device> <pin> <value>
+scripts/ion.sh pwm <device> <pin> get|set [value]
 scripts/ion.sh sub <device>                    # subscribe to device events
 ```
 
@@ -148,9 +148,14 @@ nats req ionode-01.hal.fan.get ""           # -> "1"
 | `digital_out` | actuator | digitalWrite |
 | `relay` | actuator | digitalWrite with optional inversion |
 | `pwm` | actuator | analogWrite 0-255 |
+| `rgb_led` | actuator | Built-in RGB LED, value is packed 0xRRGGBB |
 
-### Pre-registered Sensors (always available, no registration needed)
+### Pre-registered Devices (always available, no registration needed)
 - `chip_temp` - Internal chip temperature in °C
+- `clock_hour` - Current hour (0–23)
+- `clock_minute` - Current minute (0–59)
+- `clock_hhmm` - Time as HHMM (e.g. 1830)
+- `rgb_led` - Built-in RGB LED (boards with RGB LED only). Set with packed `(r<<16 | g<<8 | b)`, e.g. `16711680` = red
 
 ## Reserved HAL Keywords
 
@@ -273,6 +278,22 @@ done
 nats req ionode-01.hal.uart.write "READ" --server $IONODE_NATS_URL
 sleep 0.1
 nats req ionode-01.hal.uart.read "" --server $IONODE_NATS_URL
+```
+
+**Set the built-in RGB LED:**
+```bash
+# Red (0xFF0000 = 16711680)
+scripts/ion.sh set ionode-01 rgb_led 16711680
+# Green (0x00FF00 = 65280)
+scripts/ion.sh set ionode-01 rgb_led 65280
+# Off
+scripts/ion.sh set ionode-01 rgb_led 0
+```
+
+**Read back a PWM value:**
+```bash
+scripts/ion.sh pwm ionode-01 3 set 128
+scripts/ion.sh pwm ionode-01 3 get           # -> "128"
 ```
 
 **Monitor chip temperature across a fleet:**

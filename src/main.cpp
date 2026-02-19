@@ -575,13 +575,15 @@ static unsigned long lastHeartbeat = 0;
 void loop() {
     esp_task_wdt_reset();
 
-    /* LED heartbeat - brief dim green blink when idle */
+    /* LED heartbeat - brief dim green blink when idle (suppressed when rgb_led is active) */
     unsigned long now = millis();
     if (now - lastHeartbeat > HEARTBEAT_INTERVAL_MS) {
         lastHeartbeat = now;
-        led(0, 40, 0);
-        delay(50);
-        ledOff();
+        if (!rgbLedOverride()) {
+            led(0, 40, 0);
+            delay(50);
+            ledOff();
+        }
     }
 
     /* Check WiFi */

@@ -8,7 +8,7 @@
 #   ion.sh set  <device> <actuator> <value>     — Set a registered actuator
 #   ion.sh gpio <device> <pin> get|set [value]  — Raw GPIO read/write
 #   ion.sh adc  <device> <pin>                  — Raw ADC read
-#   ion.sh pwm  <device> <pin> <value>          — Raw PWM write
+#   ion.sh pwm  <device> <pin> get|set [value]   — Raw PWM read/write
 #   ion.sh sub  <device>                        — Subscribe to event stream
 #
 # Examples:
@@ -18,7 +18,8 @@
 #   ion.sh gpio ionode-01 4 get
 #   ion.sh gpio ionode-01 4 set 1
 #   ion.sh adc  ionode-01 2
-#   ion.sh pwm  ionode-01 3 128
+#   ion.sh pwm  ionode-01 3 set 128
+#   ion.sh pwm  ionode-01 3 get
 #   ion.sh caps ionode-01
 #   ion.sh sub  ionode-01
 #
@@ -37,7 +38,7 @@ usage() {
     echo "  ion.sh set  <device> <actuator> <value>     — Set a registered actuator"
     echo "  ion.sh gpio <device> <pin> get|set [value]  — Raw GPIO"
     echo "  ion.sh adc  <device> <pin>                  — Raw ADC read"
-    echo "  ion.sh pwm  <device> <pin> <value>          — Raw PWM write"
+    echo "  ion.sh pwm  <device> <pin> get|set [value]   — Raw PWM read/write"
     echo "  ion.sh sub  <device>                        — Subscribe to events"
     exit 1
 }
@@ -104,12 +105,25 @@ cmd_adc() {
 }
 
 cmd_pwm() {
-    local device="${1:?pwm requires <device> <pin> <value>}"
-    local pin="${2:?pwm requires <device> <pin> <value>}"
-    local value="${3:?pwm requires <device> <pin> <value>}"
-    exec nats req "${device}.hal.pwm.${pin}.set" "${value}" \
-        --server="${NATS_URL}" \
-        --timeout=5s
+    local device="${1:?pwm requires <device> <pin> get|set [value]}"
+    local pin="${2:?pwm requires <device> <pin> get|set [value]}"
+    local action="${3:?pwm requires <device> <pin> get|set [value]}"
+
+    case "$action" in
+        get)
+            exec nats req "${device}.hal.pwm.${pin}.get" "" \
+                --server="${NATS_URL}" \
+                --timeout=5s
+            ;;
+        set)
+            local value="${4:?pwm set requires a value (0-255)}"
+            exec nats req "${device}.hal.pwm.${pin}.set" "${value}" \
+                --server="${NATS_URL}" \
+                --timeout=5s
+            ;;
+        *)
+            echo "pwm action must be 'get' or 'set'"; usage ;;
+    esac
 }
 
 cmd_sub() {

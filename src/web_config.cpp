@@ -256,7 +256,8 @@ static bool isInternalDevice(DeviceKind kind) {
     return kind == DEV_SENSOR_INTERNAL_TEMP ||
            kind == DEV_SENSOR_CLOCK_HOUR ||
            kind == DEV_SENSOR_CLOCK_MINUTE ||
-           kind == DEV_SENSOR_CLOCK_HHMM;
+           kind == DEV_SENSOR_CLOCK_HHMM ||
+           kind == DEV_ACTUATOR_RGB_LED;
 }
 
 static void handleGetDevices() {
@@ -636,6 +637,8 @@ font-family:var(--mono);font-size:0.8rem;cursor:pointer;background:var(--bg2);co
 .pwm-wrap{display:flex;align-items:center;gap:0.75rem;margin-top:0.4rem}
 .pwm-wrap input[type=range]{flex:1;accent-color:var(--accent);height:6px}
 .pwm-val{font-family:var(--mono);font-size:0.85rem;color:var(--accent);min-width:3ch;text-align:right}
+input[type=color]{width:40px;height:32px;border:1px solid var(--border);border-radius:6px;
+background:var(--bg2);cursor:pointer;padding:2px}
 .pin-result{margin-top:0.75rem;padding:0.6rem;background:var(--bg2);border:1px solid var(--border);
 border-radius:8px;font-family:var(--mono);font-size:0.85rem;color:var(--accent);min-height:2em}
 .empty{text-align:center;color:var(--text3);padding:2rem 0;font-size:0.9rem}
@@ -876,7 +879,12 @@ h+='<div class="dev"><div class="dev-hdr"><span class="dev-name">'+d.name+'</spa
 h+='<span class="kind-badge">'+d.kind+'</span>';
 if(!d.internal)h+='<button class="del" onclick="deleteDevice(\''+d.name+'\')">&times;</button>';
 h+='</div>';
-if(d.kind==='digital_out'||d.kind==='relay'){
+if(d.kind==='rgb_led'){
+var hex='#'+('000000'+d.raw.toString(16)).slice(-6);
+h+='<div class="dev-meta">pin '+d.pin+'</div>';
+h+='<div class="pwm-wrap"><input type="color" value="'+hex+'" onchange="setRgb(\''+d.name+'\',this.value)"><span class="pwm-val">'+hex+'</span>';
+h+='<button class="toggle-btn'+(d.raw===0?' off-active':'')+'" onclick="setDev(\''+d.name+'\',0)" style="margin-left:0.5rem">OFF</button></div>';
+}else if(d.kind==='digital_out'||d.kind==='relay'){
 var isOn=d.raw!==0;
 h+='<div class="dev-meta">pin '+d.pin+'</div>';
 h+='<div class="toggle-wrap">';
@@ -908,6 +916,10 @@ fetch('/api/devices/set',{method:'POST',headers:{'Content-Type':'application/jso
 body:JSON.stringify({name:name,value:val})}).then(function(r){return r.json()}).then(function(j){
 if(!j.ok)toast(j.error||'Failed',false);
 }).catch(function(){toast('Set failed',false)});
+}
+function setRgb(name,hex){
+var v=parseInt(hex.slice(1),16);
+setDev(name,v);
 }
 function deleteDevice(name){
 if(!confirm('Delete device "'+name+'"?'))return;
