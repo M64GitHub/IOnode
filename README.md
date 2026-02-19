@@ -22,7 +22,7 @@ Your laptop / server / Raspberry Pi
 ### 1. Flash
 
 ```bash
-git clone <this-repo> && cd IOnode
+git clone https://github.com/M64GitHub/IOnode.git && cd IOnode
 pio run -t upload          # builds + flashes (default: ESP32-C6)
 pio run -t uploadfs        # uploads LittleFS (config template + devices.json)
 ```
