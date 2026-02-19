@@ -69,6 +69,12 @@ void sensorsPoll();
 /* Persist device registry to /devices.json */
 void devicesSave();
 
+/* Clear all devices (deinits serial_text if active, zeroes array) */
+void devicesClear();
+
+/* Reload devices from /devices.json, re-register builtins */
+void devicesReload();
+
 /* Register a new device. Returns true on success. */
 bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
                     const char *unit, bool inverted,

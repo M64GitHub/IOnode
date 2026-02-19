@@ -522,6 +522,42 @@ static void devicesLoad() {
     Serial.printf("Devices: loaded %d from /devices.json\n", count);
 }
 
+void devicesClear() {
+    /* Deinit serial_text if active */
+    if (serialTextActive()) serialTextDeinit();
+    memset(g_devices, 0, sizeof(g_devices));
+}
+
+void devicesReload() {
+    devicesClear();
+    devicesLoad();
+
+    /* Re-register builtins if missing */
+    bool changed = false;
+    if (!deviceFind("chip_temp")) {
+        deviceRegister("chip_temp", DEV_SENSOR_INTERNAL_TEMP, PIN_NONE, "C", false);
+        changed = true;
+    }
+    if (!deviceFind("clock_hour")) {
+        deviceRegister("clock_hour", DEV_SENSOR_CLOCK_HOUR, PIN_NONE, "h", false);
+        changed = true;
+    }
+    if (!deviceFind("clock_minute")) {
+        deviceRegister("clock_minute", DEV_SENSOR_CLOCK_MINUTE, PIN_NONE, "m", false);
+        changed = true;
+    }
+    if (!deviceFind("clock_hhmm")) {
+        deviceRegister("clock_hhmm", DEV_SENSOR_CLOCK_HHMM, PIN_NONE, "", false);
+        changed = true;
+    }
+    if (changed) devicesSave();
+
+    int count = 0;
+    for (int i = 0; i < MAX_DEVICES; i++)
+        if (g_devices[i].used) count++;
+    Serial.printf("Devices: reloaded (%d registered)\n", count);
+}
+
 /*============================================================================
  * Serial Text UART (one device max, UART1 on fixed pins)
  *============================================================================*/

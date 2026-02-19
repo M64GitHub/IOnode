@@ -19,6 +19,7 @@
 #include "devices.h"
 #include "nats_hal.h"
 #include "setup_portal.h"
+#include "web_config.h"
 #include "version.h"
 #include <nats_atoms.h>
 
@@ -77,6 +78,8 @@ void ledCyan()   { led(0, 255, 255); }
  *============================================================================*/
 
 bool g_debug = false;
+bool g_reboot_pending = false;
+unsigned long g_reboot_at = 0;
 #if !defined(CONFIG_IDF_TARGET_ESP32)
 temperature_sensor_handle_t g_temp_sensor = NULL;
 #endif
@@ -552,6 +555,9 @@ void setup() {
         Serial.printf("NATS: disabled (no nats_host in config)\n");
     }
 
+    /* Start web config server */
+    webConfigSetup();
+
     Serial.printf("\nReady! Free heap: %u bytes\n", ESP.getFreeHeap());
     Serial.printf("Type /help for commands.\n\n");
     Serial.printf("> ");
@@ -585,6 +591,9 @@ void loop() {
         }
         Serial.printf("> ");
     }
+
+    /* Process web server */
+    webConfigLoop();
 
     /* Process NATS */
     if (g_nats_enabled) {
@@ -654,6 +663,13 @@ void loop() {
             serialBuf[serialPos++] = c;
             Serial.print(c);
         }
+    }
+
+    /* Deferred reboot (allows HTTP response to flush) */
+    if (g_reboot_pending && millis() >= g_reboot_at) {
+        Serial.printf("Rebooting...\n");
+        delay(200);
+        ESP.restart();
     }
 
     delay(10);

@@ -1,0 +1,8 @@
+{
+  "wifi_ssid": "Ahausnetz2",
+  "wifi_pass": "WdPnwhk(sfg12);2",
+  "device_name": "ionode-03",
+  "nats_host": "192.168.178.39",
+  "nats_port": "4222",
+  "timezone": "UTC0"
+}
