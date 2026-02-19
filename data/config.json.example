@@ -1,0 +1,8 @@
+{
+  "wifi_ssid": "",
+  "wifi_pass": "",
+  "device_name": "ionode-01",
+  "nats_host": "",
+  "nats_port": "4222",
+  "timezone": "UTC0"
+}

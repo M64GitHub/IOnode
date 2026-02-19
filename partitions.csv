@@ -1,0 +1,5 @@
+# IOnode 2MB partition table
+# Name,   Type, SubType, Offset,   Size
+nvs,      data, nvs,     0x9000,   0x5000,
+app0,     app,  factory, 0x10000,  0x1B0000,
+spiffs,   data, spiffs,  0x1C0000, 0x40000,

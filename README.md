@@ -1,0 +1,323 @@
+# IOnode
+
+**Flash any ESP32. It speaks NATS. OpenClaw does the rest.**
+
+IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator on the board becomes reachable over the network via request/reply. No AI, no rules engine, no cloud. Just hardware, speaking NATS.
+
+The intelligence lives elsewhere. IOnode is the nerve ending. [OpenClaw](https://github.com/your-org/openclaw) is the brain.
+
+```
+OpenClaw (laptop/server)
+    |
+    +-- NATS
+          |-- wireclaw-01.hal.*    <-- WireClaw (AI + HAL)
+          |-- ionode-01.hal.*      <-- IOnode   (HAL only)
+          +-- ionode-02.hal.*      <-- IOnode   (HAL only)
+```
+
+WireClaw and IOnode speak the same `.hal.*` protocol. From OpenClaw's perspective they're identical for hardware access. Deploy WireClaw where you need on-device AI. Deploy IOnode everywhere else.
+
+---
+
+## Quick Start
+
+### 1. Flash
+
+```bash
+git clone <this-repo> && cd IOnode
+pio run -t upload          # builds + flashes (default: ESP32-C6)
+pio run -t uploadfs        # uploads LittleFS (config template + devices.json)
+```
+
+### 2. Configure
+
+On first boot with no config, IOnode starts a WiFi AP called **IOnode-Setup**. Connect to it, fill in the form at `192.168.4.1`:
+
+| Field | Example |
+|-------|---------|
+| WiFi SSID | `MyNetwork` |
+| WiFi Password | `hunter2` |
+| Device Name | `ionode-01` |
+| NATS Host | `192.168.1.100` |
+| NATS Port | `4222` |
+| Timezone | `CET-1CEST,M3.5.0,M10.5.0/3` |
+
+Saves to `/config.json` on LittleFS, reboots, connects.
+
+Or create `data/config.json` before flashing:
+
+```json
+{
+  "wifi_ssid": "MyNetwork",
+  "wifi_pass": "hunter2",
+  "device_name": "ionode-01",
+  "nats_host": "192.168.1.100",
+  "nats_port": "4222",
+  "timezone": "CET-1CEST,M3.5.0,M10.5.0/3"
+}
+```
+
+Then `pio run -t uploadfs` to flash the filesystem.
+
+### 3. First Commands
+
+```bash
+# Discover all IOnode/WireClaw nodes on the network
+nats req _ion.discover "" --replies=0 --timeout=2s
+
+# Read chip temperature
+nats req ionode-01.hal.system.temperature ""
+
+# Read a GPIO pin
+nats req ionode-01.hal.gpio.8.get ""
+
+# Set a GPIO pin high
+nats req ionode-01.hal.gpio.8.set "1"
+
+# Check free heap
+nats req ionode-01.hal.system.heap ""
+```
+
+---
+
+## NATS Subject Reference
+
+All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are plain text or simple values. Responses come back via NATS request/reply.
+
+### Core HAL (always available, zero config)
+
+| Subject | Payload | Response | Notes |
+|---------|---------|----------|-------|
+| `{name}.hal.gpio.{pin}.get` | - | `0` or `1` | Sets pin to INPUT, reads |
+| `{name}.hal.gpio.{pin}.set` | `0` or `1` | `ok` | Sets pin to OUTPUT, writes |
+| `{name}.hal.adc.{pin}.read` | - | `0`-`4095` | 12-bit raw ADC |
+| `{name}.hal.pwm.{pin}.set` | `0`-`255` | `ok` | 8-bit PWM output |
+| `{name}.hal.dac.*` | - | error | Not available on C3/C6/S3 |
+| `{name}.hal.uart.read` | - | last line | Requires a `serial_text` device |
+| `{name}.hal.uart.write` | text | `ok` | Requires a `serial_text` device |
+| `{name}.hal.system.temperature` | - | `38.1` | Chip temp in C |
+| `{name}.hal.system.heap` | - | `156000` | Free heap bytes |
+| `{name}.hal.system.uptime` | - | `3600` | Seconds since boot |
+| `{name}.hal.device.list` | - | JSON array | All registered devices + values |
+
+### Registered Devices (plugin sensors/actuators)
+
+Any device registered in `devices.json` is automatically routed under `{name}.hal.{device_name}`:
+
+| Subject | Payload | Response |
+|---------|---------|----------|
+| `{name}.hal.{dev}` | - | sensor value (`23.4`) or actuator state (`1`) |
+| `{name}.hal.{dev}.get` | - | same as above |
+| `{name}.hal.{dev}.set` | value | `ok` (actuators only) |
+| `{name}.hal.{dev}.info` | - | JSON: name, kind, value, pin, unit |
+
+### Discovery & Capabilities
+
+| Subject | Response |
+|---------|----------|
+| `_ion.discover` | Capabilities JSON (all nodes respond) |
+| `{name}.capabilities` | Capabilities JSON (single node) |
+
+Capabilities response:
+
+```json
+{
+  "device": "ionode-01",
+  "firmware": "ionode",
+  "version": "0.1.0",
+  "chip": "ESP32-C6",
+  "free_heap": 156000,
+  "ip": "192.168.1.42",
+  "hal": {
+    "gpio": true, "adc": true, "pwm": true,
+    "dac": false, "uart": true, "system_temp": true
+  },
+  "devices": [
+    {"name": "chip_temp", "kind": "internal_temp", "value": 38.1, "unit": "C"},
+    {"name": "clock_hour", "kind": "clock_hour", "value": 14.0, "unit": "h"}
+  ]
+}
+```
+
+---
+
+## Registering Sensors & Actuators
+
+Edit `data/devices.json` and upload with `pio run -t uploadfs`. Or let `devicesInit()` auto-register the built-ins (chip_temp, clock_hour, clock_minute, clock_hhmm) on first boot.
+
+### devices.json format
+
+```json
+[
+  {"n":"room_temp", "k":"ntc_10k",    "p":2,  "u":"C",  "i":false},
+  {"n":"light",     "k":"ldr",        "p":3,  "u":"%",  "i":false},
+  {"n":"door",      "k":"digital_in", "p":7,  "u":"",   "i":false},
+  {"n":"heater",    "k":"relay",      "p":8,  "u":"",   "i":true},
+  {"n":"fan",       "k":"pwm",        "p":9,  "u":"",   "i":false},
+  {"n":"co2",       "k":"serial_text","p":255,"u":"ppm", "i":false, "bd":9600}
+]
+```
+
+Fields: `n`=name, `k`=kind, `p`=pin (255=virtual), `u`=unit, `i`=inverted, `ns`=nats_subject (for nats_value sensors), `bd`=baud (for serial_text).
+
+### Supported device kinds
+
+| Kind | Type | What it does |
+|------|------|--------------|
+| `digital_in` | sensor | `digitalRead(pin)` -> 0/1 |
+| `analog_in` | sensor | `analogRead(pin)` -> 0-4095 |
+| `ntc_10k` | sensor | 10K NTC thermistor via Steinhart-Hart, EMA-smoothed |
+| `ldr` | sensor | Light-dependent resistor -> 0-100% |
+| `internal_temp` | sensor | ESP32 on-die temperature sensor |
+| `clock_hour` | sensor | Current hour (0-23) from NTP |
+| `clock_minute` | sensor | Current minute (0-59) from NTP |
+| `clock_hhmm` | sensor | HHMM format (e.g. 1430) |
+| `nats_value` | sensor | Subscribes to a NATS subject, stores last value |
+| `serial_text` | sensor | Reads lines from UART1, parses numeric value |
+| `digital_out` | actuator | `digitalWrite(pin, val)` |
+| `relay` | actuator | `digitalWrite` with optional inversion |
+| `pwm` | actuator | `analogWrite(pin, 0-255)` |
+
+Once registered, every device is automatically available via NATS:
+
+```bash
+nats req ionode-01.hal.room_temp ""       # -> 23.4
+nats req ionode-01.hal.heater.set "1"     # -> ok
+nats req ionode-01.hal.light ""           # -> 67.2
+nats req ionode-01.hal.room_temp.info ""  # -> {"name":"room_temp","kind":"ntc_10k",...}
+```
+
+---
+
+## Adding a New Sensor Type
+
+IOnode is designed to be forked. Adding a sensor type is a two-step process.
+
+### 1. Add the enum in `include/devices.h`
+
+```c
+enum DeviceKind {
+    // ... existing kinds ...
+    DEV_SENSOR_SERIAL_TEXT,
+    DEV_SENSOR_MY_SENSOR,      // <-- add before the actuators
+    /* Actuators */
+    DEV_ACTUATOR_DIGITAL,
+    // ...
+};
+```
+
+### 2. Add the read case in `src/devices.cpp`
+
+In `deviceReadSensor()`:
+
+```c
+case DEV_SENSOR_MY_SENSOR: {
+    // Your hardware reading code here
+    result = readMyHardware(dev->pin);
+    record_history = true;
+    break;
+}
+```
+
+And add the string mapping in `deviceKindName()` and `kindFromString()`:
+
+```c
+// deviceKindName:
+case DEV_SENSOR_MY_SENSOR: return "my_sensor";
+
+// kindFromString:
+if (strcmp(s, "my_sensor") == 0) return DEV_SENSOR_MY_SENSOR;
+```
+
+That's it. Your sensor is now:
+- Persisted in `devices.json` as `{"k":"my_sensor"}`
+- Readable via `nats req ionode-01.hal.my_sensor ""`
+- Listed in `nats req ionode-01.hal.device.list ""`
+- Included in discovery responses
+- Background-polled for history every 5 minutes
+
+No NATS code. No registration boilerplate. The HAL router handles it.
+
+---
+
+## Building & Flashing
+
+Requires [PlatformIO](https://platformio.org/).
+
+```bash
+# Build (default target: ESP32-C6)
+pio run
+
+# Build for a specific chip
+pio run -e esp32-c6
+pio run -e esp32-c3
+pio run -e esp32-s3
+pio run -e esp32
+
+# Flash firmware
+pio run -t upload
+
+# Flash filesystem (config.json + devices.json)
+pio run -t uploadfs
+
+# Serial monitor (115200 baud)
+pio device monitor
+```
+
+### Chip Compatibility
+
+| Chip | Board | Status | Notes |
+|------|-------|--------|-------|
+| ESP32-C6 | `esp32-c6-devkitc-1` | Default target | USB-CDC serial, RGB LED |
+| ESP32-S3 | `esp32-s3-devkitc-1` | Supported | RGB LED, more RAM |
+| ESP32-C3 | `esp32-c3-devkitm-1` | Supported | Smallest/cheapest RISC-V option |
+| ESP32 | `esp32dev` | Supported | Classic, no on-die temp sensor |
+
+All targets use a 2MB partition layout (works on 2MB and 4MB flash chips):
+
+| Partition | Size | Purpose |
+|-----------|------|---------|
+| app0 | 1.69 MB | Firmware |
+| spiffs | 256 KB | LittleFS (config + devices) |
+| nvs | 20 KB | Non-volatile storage |
+
+### Serial Commands
+
+Once connected, type over serial at 115200 baud:
+
+```
+/status    - WiFi, heap, uptime, NATS state, device count
+/devices   - List all devices with current values
+/debug     - Toggle debug logging
+/reboot    - Restart
+/setup     - Launch config portal (AP mode)
+/help      - List commands
+```
+
+---
+
+## Project Structure
+
+```
+IOnode/
++-- platformio.ini          Build config (pioarduino, 4 chip targets)
++-- partitions.csv          2MB flash layout
++-- include/
+|   +-- version.h           IONODE_VERSION
+|   +-- devices.h           Device registry structs & API
+|   +-- nats_hal.h          HAL NATS handler
+|   +-- setup_portal.h      Config portal
++-- src/
+|   +-- main.cpp            Setup, loop, NATS, serial commands
+|   +-- devices.cpp         Registry, sensor reading, persistence
+|   +-- nats_hal.cpp        HAL request router (gpio/adc/pwm/uart/system)
+|   +-- setup_portal.cpp    WiFi AP + captive portal + config form
++-- lib/nats/               nats_atoms - embedded NATS client library
++-- data/
+    +-- config.json.example  Config template
+    +-- devices.json         Device registry (empty on first flash)
+```
+
+---
+
+*Part of the [WireClaw](https://github.com/your-org/wireclaw) ecosystem.*
