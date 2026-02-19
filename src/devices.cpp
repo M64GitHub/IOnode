@@ -151,6 +151,27 @@ bool deviceRemove(const char *name) {
  * Sensor Reading
  *============================================================================*/
 
+/* NTC ADC warmup+read: settles ADC with warmup read, 300ms delay, then real read.
+ * Stores result directly in dev->ema (used as cache, no smoothing).
+ * ESP32 SAR ADC reads ~60mV high after >1s idle; needs ~287ms to settle. */
+static void ntcReadWithWarmup(Device *dev) {
+    /* Warmup burst — rapid 16-sample read to wake ADC */
+    for (int s = 0; s < 16; s++) analogReadMilliVolts(dev->pin);
+    delay(300);
+    /* Real read — ADC is settled after burst + 300ms pause */
+    int32_t sum = 0;
+    for (int s = 0; s < 16; s++) sum += analogReadMilliVolts(dev->pin);
+    float mV = sum / 16.0f;
+    if (mV <= 0 || mV >= 3300) { dev->ema = -999.0f; dev->ema_init = true; return; }
+    float ratio = mV / 3300.0f;
+    float resistance = dev->inverted
+        ? 10000.0f * (1.0f - ratio) / ratio
+        : 10000.0f * ratio / (1.0f - ratio);
+    float tempK = 1.0f / (1.0f / 298.15f + (1.0f / 3950.0f) * logf(resistance / 10000.0f));
+    dev->ema = tempK - 273.15f;
+    dev->ema_init = true;
+}
+
 float deviceReadSensor(Device *dev, bool record_hist) {
     if (!dev || !dev->used) return 0.0f;
 
@@ -168,34 +189,17 @@ float deviceReadSensor(Device *dev, bool record_hist) {
             record_history = true;
             break;
 
-        case DEV_SENSOR_NTC_10K: {
-            for (int s = 0; s < 64; s++) {
-                analogRead(dev->pin);  /* throwaway — ADC settle */
-                delayMicroseconds(500);
-            }
-            int32_t sum = 0;
-            for (int s = 0; s < 16; s++) sum += analogRead(dev->pin);
-            int raw = sum / 16;
-            if (raw <= 0 || raw >= 4095) return -999.0f;
-            float resistance;
-            if (dev->inverted)
-                resistance = 10000.0f * (4095.0f - raw) / (float)raw;   /* NTC on top (3.3V side) */
-            else
-                resistance = 10000.0f * raw / (4095.0f - raw);          /* NTC on bottom (GND side) */
-            float tempK = 1.0f / (1.0f / 298.15f + (1.0f / 3950.0f) * logf(resistance / 10000.0f));
-            float raw_val = tempK - 273.15f;
-            if (!dev->ema_init) { dev->ema = raw_val; dev->ema_init = true; }
-            else                { dev->ema = 0.3f * raw_val + 0.7f * dev->ema; }
+        case DEV_SENSOR_NTC_10K:
+            if (!dev->ema_init) ntcReadWithWarmup(dev);  /* first read before sensorsPoll */
             result = dev->ema;
             record_history = true;
             break;
-        }
 
         case DEV_SENSOR_LDR: {
             int32_t sum = 0;
-            for (int s = 0; s < 16; s++) sum += analogRead(dev->pin);
-            int raw = sum / 16;
-            result = (float)raw * 100.0f / 4095.0f;
+            for (int s = 0; s < 16; s++) sum += analogReadMilliVolts(dev->pin);
+            float mV = sum / 16.0f;
+            result = mV * 100.0f / 3300.0f;
             record_history = true;
             break;
         }
@@ -619,25 +623,26 @@ bool serialTextActive() {
  *============================================================================*/
 
 void sensorsPoll() {
-    static uint32_t last_ema  = 0;
+    static uint32_t last_ntc  = 0;
     static uint32_t last_hist = 0;
     uint32_t now = millis();
 
-    bool do_ema  = (now - last_ema  >= 10000);   /* every 10 seconds */
+    bool do_ntc  = (now - last_ntc  >= 5000);    /* every 5 seconds */
     bool do_hist = (now - last_hist >= 300000);   /* every 5 minutes */
 
-    if (!do_ema && !do_hist) return;
-    if (do_ema)  last_ema  = now;
+    if (!do_ntc && !do_hist) return;
+    if (do_ntc)  last_ntc  = now;
     if (do_hist) last_hist = now;
 
     for (int i = 0; i < MAX_DEVICES; i++) {
         Device *d = &g_devices[i];
         if (!d->used || !deviceIsSensor(d->kind)) continue;
 
-        if (d->kind == DEV_SENSOR_NTC_10K)
-            deviceReadSensor(d, do_hist);   /* always read for EMA, history every 5min */
-        else if (do_hist)
-            deviceReadSensor(d, true);      /* all other sensors: read + history every 5min */
+        if (d->kind == DEV_SENSOR_NTC_10K && do_ntc)
+            ntcReadWithWarmup(d);           /* warmup + delay + read → cached */
+
+        if (do_hist)
+            deviceReadSensor(d, true);      /* all sensors: record history every 5min */
     }
 }
 
