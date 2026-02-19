@@ -388,7 +388,7 @@ OpenClaw: GPIO 1 is now high. ⚡
 
 OpenClaw understands the design split naturally:
 
-> *WireClaw = AI reasoning loop on the chip, local rules engine, self-contained*
+> *[WireClaw](https://wireclaw.io) = AI reasoning loop on the chip, local rules engine, self-contained*
 > *IOnode = dumb but fast, all automation logic lives here with me*
 
 Same `.hal.` protocol means OpenClaw talks to both interchangeably with the same commands.
@@ -440,16 +440,16 @@ OpenClaw writes a shell script using `ion.sh`, runs it as a background job, and 
 "When the calendar shows a meeting starting, dim the LED strip on ionode-02"
 ```
 
-### WireClaw + IOnode Together
+### [WireClaw](https://wireclaw.io) + IOnode Together
 
-Because both speak the same `.hal.` protocol, OpenClaw addresses them identically for hardware access. A mixed fleet just works:
+[WireClaw](https://wireclaw.io) is the sibling project - a full AI agent running directly on an ESP32, with an on-device rules engine, Telegram integration, and LLM chat. Both projects share the same `.hal.` protocol, so OpenClaw addresses them identically for hardware access. A mixed fleet just works:
 
 ```
 "Read the temperature from wireclaw-01 and ionode-01 and compare them"
 "Turn off all relays named 'fan' across all devices on the network"
 ```
 
-For WireClaw-specific features (on-device rules, Telegram, AI tools), use the WireClaw skill alongside this one.
+For WireClaw-specific features (on-device rules, Telegram, AI tools), use the [WireClaw skill](https://github.com/M64GitHub/WireClaw) alongside this one.
 
 ---
 
