@@ -61,7 +61,7 @@ Then `pio run -t uploadfs` to flash the filesystem.
 
 ### 3. Open the Web UI
 
-Once connected, browse to `http://{device-name}.local/` or the device IP. The web UI lets you configure the node, add and control devices, poke raw pins, and check system status — no terminal required.
+Once connected, browse to `http://{device-name}.local/` or the device IP. The web UI lets you configure the node, add and control devices, poke raw pins, and check system status - no terminal required.
 
 ### 4. First Commands
 
@@ -151,7 +151,7 @@ IOnode serves a configuration and control interface on port 80. Access it at `ht
 
 ### Config tab
 
-Network and system settings (WiFi, NATS, device name, timezone). Also contains a live `devices.json` editor — read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
+Network and system settings (WiFi, NATS, device name, timezone). Also contains a live `devices.json` editor - read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
 
 ### Devices tab
 
@@ -165,13 +165,13 @@ All registered devices with kind-appropriate controls:
 | `digital_out`, `relay` | ON / OFF toggle buttons |
 | `pwm` | Slider 0–255 with live value display |
 
-An **Add Device** form at the top lets you register new sensors and actuators without editing JSON. Fields adapt to the selected kind — relay shows an Inverted checkbox, serial_text shows a Baud Rate field instead of a pin number.
+An **Add Device** form at the top lets you register new sensors and actuators without editing JSON. Fields adapt to the selected kind - relay shows an Inverted checkbox, serial_text shows a Baud Rate field instead of a pin number.
 
 After any add or delete, the `devices.json` editor in the Config tab updates automatically.
 
 ### Pins tab
 
-Direct hardware access without registering a device. Pick a pin number, a type (GPIO / ADC / PWM), and hit Read or Write. Useful for wiring verification and bring-up. PWM reads return the last written value (cached — PWM is write-only on the hardware side).
+Direct hardware access without registering a device. Pick a pin number, a type (GPIO / ADC / PWM), and hit Read or Write. Useful for wiring verification and bring-up. PWM reads return the last written value (cached - PWM is write-only on the hardware side).
 
 ### Status tab
 
