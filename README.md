@@ -6,6 +6,8 @@ IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable ha
 
 Flash it, name it, point it at a NATS server - and your hardware is on the network. Read sensors from a script, toggle a relay from Node-RED, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) to orchestrate your entire node fleet with natural language. The intelligence lives wherever you want it. IOnode just makes the hardware available.
 
+Built to be hacked — [add any sensor or hardware you want](#adding-a-new-sensor-type).
+
 → **[OpenClaw Integration](#openclaw-integration)** - control IOnode with natural language
 
 ```
