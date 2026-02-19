@@ -78,6 +78,40 @@ nats req ionode-01.hal.system.heap ""
 
 ---
 
+## Web UI
+
+IOnode serves a configuration and control interface on port 80. Access it at `http://{device-name}.local/` or the device IP shown in the serial monitor on boot.
+
+### Config tab
+
+Network and system settings (WiFi, NATS, device name, timezone). Also contains a live `devices.json` editor - read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
+
+### Devices tab
+
+All registered devices with kind-appropriate controls:
+
+| Kind | Widget |
+|------|--------|
+| `ntc_10k`, `ldr`, `analog_in`, `digital_in` | Live value + unit, sparkline history |
+| `internal_temp` | Live chip temperature, always present |
+| `serial_text` | Last received UART line |
+| `digital_out`, `relay` | ON / OFF toggle buttons |
+| `pwm` | Slider 0–255 with live value display |
+
+An **Add Device** form at the top lets you register new sensors and actuators without editing JSON. Fields adapt to the selected kind - relay shows an Inverted checkbox, serial_text shows a Baud Rate field instead of a pin number.
+
+After any add or delete, the `devices.json` editor in the Config tab updates automatically.
+
+### Pins tab
+
+Direct hardware access without registering a device. Pick a pin number, a type (GPIO / ADC / PWM), and hit Read or Write. Useful for wiring verification and bring-up. PWM reads return the last written value (cached - PWM is write-only on the hardware side).
+
+### Status tab
+
+Version, device name, uptime, heap, WiFi SSID + signal strength, IP address, NATS connection state.
+
+---
+
 ## NATS Subject Reference
 
 All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are plain text or simple values. Responses come back via NATS request/reply.
