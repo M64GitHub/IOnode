@@ -6,6 +6,8 @@ IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable ha
 
 Flash it, name it, point it at a NATS server - and your hardware is on the network. Read sensors from a script, toggle a relay from Node-RED, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) to orchestrate your entire node fleet with natural language. The intelligence lives wherever you want it. IOnode just makes the hardware available.
 
+→ **[OpenClaw Integration](#openclaw-integration)** - control IOnode with natural language
+
 ```
 Your laptop / server / Raspberry Pi
     |
@@ -22,7 +24,7 @@ Your laptop / server / Raspberry Pi
 ### 1. Flash
 
 ```bash
-git clone https://github.com/M64GitHub/IOnode.git && cd IOnode
+git clone <this-repo> && cd IOnode
 pio run -t upload          # builds + flashes (default: ESP32-C6)
 pio run -t uploadfs        # uploads LittleFS (config template + devices.json)
 ```
@@ -356,13 +358,7 @@ Any Home Assistant NATS integration can poll IOnode subjects as sensors or send 
 
 ### OpenClaw
 
-[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that runs on your laptop or server and orchestrates NATS-connected devices using natural language. Load the IOnode skill and OpenClaw can discover your nodes, read sensors, control actuators, and write persistent automation scripts - all from a chat interface.
-
-```
-"Check the temperature on ionode-01 every 5 minutes and turn on the fan if it's above 28°C"
-```
-
-OpenClaw writes the script, runs it as a background job, done.
+[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that orchestrates NATS-connected hardware using natural language. See the [OpenClaw Integration](#openclaw-integration) chapter for full details.
 
 ### Anything else
 
@@ -372,6 +368,88 @@ If it speaks NATS, it works with IOnode. The protocol is two lines:
 nats req {device}.hal.{sensor} ""        # read
 nats req {device}.hal.{actuator}.set "1" # write
 ```
+
+---
+
+## OpenClaw Integration
+
+[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that runs on your laptop or server and orchestrates NATS-connected devices using natural language. With the IOnode skill installed, OpenClaw discovers your nodes automatically and can read sensors, control actuators, and write persistent automation scripts - all from a chat interface.
+
+```
+You: "read gpio 1 from ionode-01 please"
+OpenClaw: GPIO 1 on ionode-01 reads 0 (low). 158ms RTT. ⚡
+
+You: "and gpio 0?"
+OpenClaw: GPIO 0 reads 1 (high). 63ms RTT. Something's pulling that pin up!
+
+You: "now set gpio 1 to high please!"
+OpenClaw: GPIO 1 is now high. ⚡
+```
+
+OpenClaw understands the design split naturally:
+
+> *WireClaw = AI reasoning loop on the chip, local rules engine, self-contained*
+> *IOnode = dumb but fast, all automation logic lives here with me*
+
+Same `.hal.` protocol means OpenClaw talks to both interchangeably with the same commands.
+
+### Install the IOnode Skill
+
+```bash
+openclaw install ionode
+```
+
+Or manually copy `skill/ionode/` to `~/.openclaw/workspace/skills/ionode/`.
+
+Set your NATS server if not on localhost:
+
+```bash
+export IONODE_NATS_URL="nats://192.168.1.100:4222"
+```
+
+### What OpenClaw Can Do
+
+**Discover your fleet:**
+```
+"What IOnode devices are on the network?"
+```
+OpenClaw runs `ion.sh discover`, parses capabilities, and summarizes every node - chip type, free heap, registered sensors, HAL features.
+
+**Read sensors:**
+```
+"What's the temperature on ionode-01?"
+"Check the light level and chip temp on all nodes"
+```
+
+**Control hardware:**
+```
+"Turn on the fan relay on ionode-02"
+"Set the LED strip on ionode-01 to half brightness"
+"Toggle GPIO 4 on ionode-01"
+```
+
+**Write automation scripts:**
+```
+"Every 30 seconds, check the temperature on ionode-01 and turn on the fan if it's above 28°C"
+```
+OpenClaw writes a shell script using `ion.sh`, runs it as a background job, and monitors it.
+
+**Cross-domain automation:**
+```
+"If the GitHub CI build fails, set GPIO 4 on ionode-01 high"
+"When the calendar shows a meeting starting, dim the LED strip on ionode-02"
+```
+
+### WireClaw + IOnode Together
+
+Because both speak the same `.hal.` protocol, OpenClaw addresses them identically for hardware access. A mixed fleet just works:
+
+```
+"Read the temperature from wireclaw-01 and ionode-01 and compare them"
+"Turn off all relays named 'fan' across all devices on the network"
+```
+
+For WireClaw-specific features (on-device rules, Telegram, AI tools), use the WireClaw skill alongside this one.
 
 ---
 
