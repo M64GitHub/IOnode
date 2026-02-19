@@ -4,7 +4,7 @@
 
 IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator on the board becomes reachable over the network via request/reply. No AI, no rules engine, no cloud. Just hardware, speaking NATS.
 
-The intelligence lives elsewhere. IOnode is the nerve ending. [OpenClaw](https://github.com/your-org/openclaw) is the brain.
+The intelligence lives elsewhere. IOnode is the nerve ending. [OpenClaw](https://github.com/openclaw/openclaw) is the brain.
 
 ```
 OpenClaw (laptop/server)
