@@ -416,6 +416,7 @@ static void handleSerialCommand(const char *input) {
     const char *cmd = input + 1; /* skip leading '/' */
 
     if (strcmp(cmd, "status") == 0) {
+        Serial.printf("Device: %s\n", cfg_device_name);
         Serial.printf("WiFi: %s (%s)\n",
             WiFi.status() == WL_CONNECTED ? "connected" : "disconnected",
             WiFi.localIP().toString().c_str());
@@ -507,6 +508,8 @@ void setup() {
 
     /* Load config from LittleFS */
     loadConfig();
+
+    Serial.printf("Device: %s\n", cfg_device_name);
 
     /* Initialize temperature sensor (not available on classic ESP32) */
 #if !defined(CONFIG_IDF_TARGET_ESP32)

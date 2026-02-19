@@ -1,21 +1,19 @@
 # IOnode
 
-**Flash any ESP32. It speaks NATS. OpenClaw does the rest.**
+**Flash any ESP32. It speaks NATS.**
 
-IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator on the board becomes reachable over the network via request/reply. No AI, no rules engine, no cloud. Just hardware, speaking NATS.
+IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator on the board becomes instantly reachable over the network via simple request/reply.
 
-The intelligence lives elsewhere. IOnode is the nerve ending. [OpenClaw](https://github.com/openclaw/openclaw) is the brain.
+Flash it, name it, point it at a NATS server - and your hardware is on the network. Read sensors from a script, toggle a relay from Node-RED, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) to orchestrate your entire node fleet with natural language. The intelligence lives wherever you want it. IOnode just makes the hardware available.
 
 ```
-OpenClaw (laptop/server)
+Your laptop / server / Raspberry Pi
     |
     +-- NATS
-          |-- wireclaw-01.hal.*    <-- WireClaw (AI + HAL)
-          |-- ionode-01.hal.*      <-- IOnode   (HAL only)
-          +-- ionode-02.hal.*      <-- IOnode   (HAL only)
+          |-- ionode-01.hal.*      <-- temperature sensor, relay
+          |-- ionode-02.hal.*      <-- ADC inputs, PWM outputs
+          +-- ionode-03.hal.*      <-- UART bridge, GPIO
 ```
-
-WireClaw and IOnode speak the same `.hal.*` protocol. From OpenClaw's perspective they're identical for hardware access. Deploy WireClaw where you need on-device AI. Deploy IOnode everywhere else.
 
 ---
 
@@ -59,11 +57,7 @@ Or create `data/config.json` before flashing:
 
 Then `pio run -t uploadfs` to flash the filesystem.
 
-### 3. Open the Web UI
-
-Once connected, browse to `http://{device-name}.local/` or the device IP. The web UI lets you configure the node, add and control devices, poke raw pins, and check system status - no terminal required.
-
-### 4. First Commands
+### 3. First Commands
 
 ```bash
 # Discover all IOnode/WireClaw nodes on the network
@@ -142,40 +136,6 @@ Capabilities response:
   ]
 }
 ```
-
----
-
-## Web UI
-
-IOnode serves a configuration and control interface on port 80. Access it at `http://{device-name}.local/` or the device IP shown in the serial monitor on boot.
-
-### Config tab
-
-Network and system settings (WiFi, NATS, device name, timezone). Also contains a live `devices.json` editor - read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
-
-### Devices tab
-
-All registered devices with kind-appropriate controls:
-
-| Kind | Widget |
-|------|--------|
-| `ntc_10k`, `ldr`, `analog_in`, `digital_in` | Live value + unit, sparkline history |
-| `internal_temp` | Live chip temperature, always present |
-| `serial_text` | Last received UART line |
-| `digital_out`, `relay` | ON / OFF toggle buttons |
-| `pwm` | Slider 0–255 with live value display |
-
-An **Add Device** form at the top lets you register new sensors and actuators without editing JSON. Fields adapt to the selected kind - relay shows an Inverted checkbox, serial_text shows a Baud Rate field instead of a pin number.
-
-After any add or delete, the `devices.json` editor in the Config tab updates automatically.
-
-### Pins tab
-
-Direct hardware access without registering a device. Pick a pin number, a type (GPIO / ADC / PWM), and hit Read or Write. Useful for wiring verification and bring-up. PWM reads return the last written value (cached - PWM is write-only on the hardware side).
-
-### Status tab
-
-Version, device name, uptime, heap, WiFi SSID + signal strength, IP address, NATS connection state.
 
 ---
 
@@ -334,6 +294,53 @@ Once connected, type over serial at 115200 baud:
 
 ---
 
+## Integrations
+
+IOnode speaks plain NATS request/reply. Any system that can send a NATS message can read a sensor or control an actuator. No SDK, no special driver, no cloud account.
+
+### Scripts
+
+The simplest integration - a shell script using the `nats` CLI:
+
+```bash
+# Read temperature and act on it
+TEMP=$(nats req ionode-01.hal.temperature "" --server nats://192.168.1.100:4222)
+if (( $(echo "$TEMP > 30" | bc -l) )); then
+  nats pub ionode-01.hal.fan.set "1" --server nats://192.168.1.100:4222
+fi
+```
+
+Run it from cron, a Raspberry Pi, a server - anywhere with the `nats` CLI installed.
+
+### Node-RED
+
+Use the [node-red-contrib-nats](https://flows.nodered.org/node/node-red-contrib-nats) node. Point a request node at `ionode-01.hal.temperature` and wire it to whatever logic you need. IOnode becomes just another input/output in your flow.
+
+### Home Assistant
+
+Any Home Assistant NATS integration can poll IOnode subjects as sensors or send commands to actuators. The flat subject structure (`{device}.hal.{name}`) maps cleanly to HA entity naming conventions.
+
+### OpenClaw
+
+[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that runs on your laptop or server and orchestrates NATS-connected devices using natural language. Load the IOnode skill and OpenClaw can discover your nodes, read sensors, control actuators, and write persistent automation scripts - all from a chat interface.
+
+```
+"Check the temperature on ionode-01 every 5 minutes and turn on the fan if it's above 28°C"
+```
+
+OpenClaw writes the script, runs it as a background job, done.
+
+### Anything else
+
+If it speaks NATS, it works with IOnode. The protocol is two lines:
+
+```bash
+nats req {device}.hal.{sensor} ""        # read
+nats req {device}.hal.{actuator}.set "1" # write
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -344,13 +351,11 @@ IOnode/
 |   +-- version.h           IONODE_VERSION
 |   +-- devices.h           Device registry structs & API
 |   +-- nats_hal.h          HAL NATS handler
-|   +-- web_config.h        Web UI server
 |   +-- setup_portal.h      Config portal
 +-- src/
 |   +-- main.cpp            Setup, loop, NATS, serial commands
 |   +-- devices.cpp         Registry, sensor reading, persistence
 |   +-- nats_hal.cpp        HAL request router (gpio/adc/pwm/uart/system)
-|   +-- web_config.cpp      Web UI + REST API (Config/Devices/Pins/Status tabs)
 |   +-- setup_portal.cpp    WiFi AP + captive portal + config form
 +-- lib/nats/               nats_atoms - embedded NATS client library
 +-- data/
@@ -360,4 +365,4 @@ IOnode/
 
 ---
 
-*Part of the [WireClaw](https://github.com/your-org/wireclaw) ecosystem.*
+*Part of the [WireClaw](https://github.com/M64GitHub/WireClaw) ecosystem.*

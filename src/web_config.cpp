@@ -558,9 +558,9 @@ static const char WEB_CONFIG_HTML[] PROGMEM = R"rawhtml(<!DOCTYPE html><html lan
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
 --bg:#08090e;--bg2:#0d1019;--bg3:#141822;
---accent:#00d4aa;--accent-dim:rgba(0,212,170,0.15);--accent-glow:rgba(0,212,170,0.25);
+--accent:#ff8c00;--accent-dim:rgba(255,140,0,0.15);--accent-glow:rgba(255,140,0,0.25);
 --text:#e8eaf0;--text2:#8b92a8;--text3:#4a5068;
---border:rgba(255,255,255,0.06);--border-a:rgba(0,212,170,0.25);
+--border:rgba(255,255,255,0.06);--border-a:rgba(255,140,0,0.25);
 --red:#ff4757;
 --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 --mono:"SF Mono","Cascadia Code","Fira Code",Consolas,monospace;
@@ -695,6 +695,7 @@ nav button{padding:0.4rem 0.6rem;font-size:0.8rem}
 <button class="btn btn-primary" onclick="djSave()">Save JSON</button>
 <button class="btn btn-outline" onclick="djCancel()">Cancel</button>
 </div>
+<p class="hint" style="margin-top:0.75rem">Direct edit for power users. Use the Devices tab to add/remove devices normally.</p>
 </div>
 </div>
 
