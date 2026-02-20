@@ -206,7 +206,7 @@ Capabilities response:
 
 ## Fleet Management
 
-IOnode supports fleet-level operations — tagging, group queries, health monitoring, threshold alerts, and full remote configuration — all via NATS. No reflash, no web UI required.
+IOnode supports fleet-level operations - tagging, group queries, health monitoring, threshold alerts, and full remote configuration - all via NATS. No reflash, no web UI required.
 
 ### Tags & Group Discovery
 
@@ -217,7 +217,7 @@ nats req ionode-01.config.tag.set 'greenhouse'
 nats req _ion.group.greenhouse ''              # all greenhouse nodes respond
 ```
 
-Tags can be changed at runtime without reboot — the group subscription updates live. Tags appear in discovery responses and the Status tab.
+Tags can be changed at runtime without reboot - the group subscription updates live. Tags appear in discovery responses and the Status tab.
 
 ### Health Heartbeat
 
@@ -233,7 +233,7 @@ Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s, c
 
 ### Threshold Events
 
-Sensors (including internal chip temperature) can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown — fires once on crossing, re-arms when the value returns to the safe side:
+Sensors (including internal chip temperature) can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown - fires once on crossing, re-arms when the value returns to the safe side:
 
 ```bash
 nats req ionode-01.config.event.set '{"n":"chip_temp","t":45,"d":"above","cd":30}'
@@ -244,11 +244,11 @@ Events persist across reboots. Configurable via NATS, web API, and the web UI de
 
 ### Actuator State Persistence
 
-Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB are excluded — resuming a PWM mid-value on boot could be dangerous.
+Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB are excluded - resuming a PWM mid-value on boot could be dangerous.
 
 ### Remote Configuration
 
-The full device registry, tags, heartbeat, and events can be managed remotely via `{name}.config.>` NATS subjects — see the [NATS Subject Reference](#nats-subject-reference) above.
+The full device registry, tags, heartbeat, and events can be managed remotely via `{name}.config.>` NATS subjects - see the [NATS Subject Reference](#nats-subject-reference) above.
 
 ---
 

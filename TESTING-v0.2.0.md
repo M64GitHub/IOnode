@@ -1,4 +1,4 @@
-# IOnode v0.2.0 — Testing Guide
+# IOnode v0.2.0 - Testing Guide
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ All examples assume device name `ionode-01`. Replace with your actual device nam
 Confirm the node is online and responding:
 
 ```bash
-# Discovery — should return full capabilities JSON
+# Discovery - should return full capabilities JSON
 nats req _ion.discover '' --timeout 3s
 
 # Direct capabilities
@@ -425,7 +425,7 @@ nats req ionode-01.hal.fan.get '' --timeout 3s
 nats req _ion.group.greenhouse '' --timeout 3s
 # Expected: capabilities with tag, temp sensor, fan actuator
 
-# 9. Reboot — fan should restore ON
+# 9. Reboot - fan should restore ON
 curl -X POST http://<device-ip>/api/reboot
 # Wait for reconnect...
 nats req ionode-01.hal.fan.get '' --timeout 10s
@@ -442,7 +442,7 @@ nats req ionode-01.config.heartbeat.set '60' --timeout 3s
 
 ---
 
-## Quick Reference — All New NATS Subjects
+## Quick Reference - All New NATS Subjects
 
 | Subject | Payload | Description |
 |---------|---------|-------------|
