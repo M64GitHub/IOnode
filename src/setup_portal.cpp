@@ -28,18 +28,19 @@ static const char SETUP_HTML[] PROGMEM = R"rawhtml(<!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>IOnode Setup</title><style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Courier New',monospace;background:#0a0a0a;color:#e0e0e0;padding:20px;max-width:480px;margin:0 auto}
-h1{color:#00d4aa;font-size:1.5em;margin-bottom:4px}
-.sub{color:#666;font-size:0.85em;margin-bottom:20px}
-label{display:block;margin:12px 0 4px;color:#00d4aa;font-size:0.9em}
-input[type=text],input[type=password]{width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;color:#fff;font-family:inherit;font-size:0.95em;border-radius:4px}
-input:focus{outline:none;border-color:#00d4aa}
-.opt{color:#555;font-size:0.8em}
-.sep{border-top:1px solid #222;margin:16px 0}
-button{width:100%;padding:12px;margin-top:20px;background:#00d4aa;color:#0a0a0a;border:none;font-family:inherit;font-size:1em;font-weight:bold;cursor:pointer;border-radius:4px}
-button:hover{background:#00b894}
+body{font-family:'Courier New',monospace;background:#08090e;color:#e8eaf0;padding:20px;max-width:480px;margin:0 auto}
+.logo{display:flex;align-items:center;gap:0.5rem;margin-bottom:4px}
+h1{color:#ff8c00;font-size:1.5em}
+.sub{color:#8b92a8;font-size:0.85em;margin-bottom:20px}
+label{display:block;margin:12px 0 4px;color:#ff8c00;font-size:0.9em}
+input[type=text],input[type=password]{width:100%;padding:10px;background:#0d1019;border:1px solid rgba(255,255,255,0.06);color:#fff;font-family:inherit;font-size:0.95em;border-radius:4px}
+input:focus{outline:none;border-color:#ff8c00}
+.opt{color:#4a5068;font-size:0.8em}
+.sep{border-top:1px solid rgba(255,255,255,0.06);margin:16px 0}
+button{width:100%;padding:12px;margin-top:20px;background:#ff8c00;color:#08090e;border:none;font-family:inherit;font-size:1em;font-weight:bold;cursor:pointer;border-radius:4px}
+button:hover{background:#ffa333}
 </style></head><body>
-<h1>&gt; IOnode Setup</h1>
+<div class="logo"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" rx="4" stroke="#ff8c00" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="#ff8c00"/><line x1="16" y1="4" x2="16" y2="10" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="22" x2="16" y2="28" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="16" x2="10" y2="16" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/><line x1="22" y1="16" x2="28" y2="16" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/></svg><h1>&gt; IOnode Setup</h1></div>
 <p class="sub">Configure your hardware node</p>
 <form method="POST" action="/save">
 <label>WiFi SSID *</label>
@@ -64,8 +65,8 @@ button:hover{background:#00b894}
 static const char SAVED_HTML[] PROGMEM = R"rawhtml(<!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>IOnode - Saved</title><style>
-body{font-family:'Courier New',monospace;background:#0a0a0a;color:#00d4aa;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
-h1{font-size:1.5em;margin-bottom:8px}p{color:#666}
+body{font-family:'Courier New',monospace;background:#08090e;color:#ff8c00;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+h1{font-size:1.5em;margin-bottom:8px}p{color:#8b92a8}
 </style></head><body>
 <div><h1>Config saved!</h1><p>Rebooting...</p></div>
 </body></html>)rawhtml";
@@ -309,7 +310,7 @@ void runSetupPortal() {
         uint8_t brightness = (ms < 1000)
             ? (uint8_t)(ms * 255 / 1000)
             : (uint8_t)((2000 - ms) * 255 / 1000);
-        led(0, brightness, brightness);
+        led(brightness, brightness * 140 / 255, 0);
 
         WiFiClient client = server.accept();
         if (client) {

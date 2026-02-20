@@ -5,6 +5,7 @@
 
 #include "devices.h"
 #include "nats_hal.h"
+#include <nats_atoms.h>
 #include <LittleFS.h>
 #if !defined(CONFIG_IDF_TARGET_ESP32)
 #include "driver/temperature_sensor.h"
@@ -12,8 +13,15 @@ extern temperature_sensor_handle_t g_temp_sensor;
 #endif
 #include <math.h>
 extern bool g_debug;
+extern bool g_devices_dirty;
+extern unsigned long g_devices_dirty_ms;
 
 static Device g_devices[MAX_DEVICES];
+
+void devicesMarkDirty() {
+    g_devices_dirty = true;
+    g_devices_dirty_ms = millis();
+}
 
 /*============================================================================
  * Kind helpers
@@ -266,7 +274,14 @@ bool deviceSetActuator(Device *dev, int value) {
     if (!dev || !dev->used || !deviceIsActuator(dev->kind)) return false;
     if (dev->pin == PIN_NONE) return false;
 
+    int prev = dev->last_value;
     dev->last_value = value;
+
+    /* Debounced persist for relay/digital_out only */
+    if ((dev->kind == DEV_ACTUATOR_RELAY || dev->kind == DEV_ACTUATOR_DIGITAL)
+        && value != prev) {
+        devicesMarkDirty();
+    }
 
     switch (dev->kind) {
         case DEV_ACTUATOR_DIGITAL:
@@ -420,6 +435,18 @@ static int devJsonGetInt(const char *json, const char *key, int default_val) {
     return atoi(p);
 }
 
+static float devJsonGetFloat(const char *json, const char *key, float default_val) {
+    char pattern[48];
+    snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+    const char *p = strstr(json, pattern);
+    if (!p) return default_val;
+    p += strlen(pattern);
+    while (*p == ' ' || *p == ':') p++;
+    char *end = nullptr;
+    float v = strtof(p, &end);
+    return (end != p) ? v : default_val;
+}
+
 static bool devJsonGetBool(const char *json, const char *key, bool default_val) {
     char pattern[48];
     snprintf(pattern, sizeof(pattern), "\"%s\"", key);
@@ -457,6 +484,19 @@ void devicesSave() {
         if (d->baud > 0) {
             w += snprintf(buf + w, sizeof(buf) - w,
                 ",\"bd\":%u", (unsigned)d->baud);
+        }
+        /* Persist last value for relay/digital_out (safe to restore on boot) */
+        if ((d->kind == DEV_ACTUATOR_RELAY || d->kind == DEV_ACTUATOR_DIGITAL)
+            && d->last_value != 0) {
+            w += snprintf(buf + w, sizeof(buf) - w,
+                ",\"v\":%d", d->last_value);
+        }
+        /* Persist event config as flat keys (no nesting to avoid parser issues) */
+        if (d->ev_direction != EV_DIR_NONE) {
+            const char *dir = d->ev_direction == EV_DIR_ABOVE ? "above" : "below";
+            w += snprintf(buf + w, sizeof(buf) - w,
+                ",\"et\":%.1f,\"ed\":\"%s\",\"ec\":%d",
+                d->ev_threshold, dir, d->ev_cooldown);
         }
         w += snprintf(buf + w, sizeof(buf) - w, "}");
 
@@ -523,6 +563,35 @@ static void devicesLoad() {
         DeviceKind kind = kindFromString(kind_str);
         deviceRegister(name, kind, (uint8_t)pin, unit, inverted,
                        nats_subj[0] ? nats_subj : nullptr, baud);
+
+        /* Restore persisted actuator value for relay/digital_out */
+        if (kind == DEV_ACTUATOR_RELAY || kind == DEV_ACTUATOR_DIGITAL) {
+            int saved_val = devJsonGetInt(objBuf, "v", 0);
+            if (saved_val != 0) {
+                Device *d = deviceFind(name);
+                if (d) deviceSetActuator(d, saved_val);
+            }
+        }
+
+        /* Load event config (flat keys: "et" float, "ed" string, "ec" int) */
+        {
+            char ed_str[8] = "";
+            devJsonGetString(objBuf, "ed", ed_str, sizeof(ed_str));
+            if (ed_str[0]) {
+                Device *d = deviceFind(name);
+                if (d) {
+                    if (strcmp(ed_str, "above") == 0) d->ev_direction = EV_DIR_ABOVE;
+                    else if (strcmp(ed_str, "below") == 0) d->ev_direction = EV_DIR_BELOW;
+                    if (d->ev_direction != EV_DIR_NONE) {
+                        d->ev_threshold = devJsonGetFloat(objBuf, "et", 0.0f);
+                        d->ev_cooldown = (uint16_t)devJsonGetInt(objBuf, "ec", 10);
+                        d->ev_armed = true;
+                        d->ev_last_fire_ms = 0;
+                    }
+                }
+            }
+        }
+
         count++;
 
         p = obj_end + 1;
@@ -700,6 +769,86 @@ void sensorsPoll() {
         if (do_hist)
             deviceReadSensor(d, true);      /* all sensors: record history every 5min */
     }
+}
+
+/*============================================================================
+ * Events — threshold crossing detection + NATS publish
+ *============================================================================*/
+
+extern NatsClient natsClient;
+extern char cfg_device_name[32];
+extern uint32_t g_events_fired;
+extern bool g_nats_connected;
+
+static char g_ev_json[256];
+static char g_ev_subject[64];
+
+void eventsCheck() {
+    uint32_t now = millis();
+
+    for (int i = 0; i < MAX_DEVICES; i++) {
+        Device *d = &g_devices[i];
+        if (!d->used || d->ev_direction == EV_DIR_NONE) continue;
+        if (!deviceIsSensor(d->kind)) continue;
+
+        /* Cooldown check */
+        if (d->ev_last_fire_ms != 0 &&
+            (now - d->ev_last_fire_ms) < (uint32_t)d->ev_cooldown * 1000) {
+            continue;
+        }
+
+        float val = deviceReadSensor(d);
+        bool threshold_crossed = false;
+
+        if (d->ev_direction == EV_DIR_ABOVE) {
+            if (val > d->ev_threshold) {
+                if (d->ev_armed) threshold_crossed = true;
+            } else {
+                /* Re-arm when value returns below threshold */
+                d->ev_armed = true;
+            }
+        } else if (d->ev_direction == EV_DIR_BELOW) {
+            if (val < d->ev_threshold) {
+                if (d->ev_armed) threshold_crossed = true;
+            } else {
+                /* Re-arm when value returns above threshold */
+                d->ev_armed = true;
+            }
+        }
+
+        if (threshold_crossed) {
+            d->ev_armed = false;
+            d->ev_last_fire_ms = now;
+            g_events_fired++;
+
+            /* Publish event */
+            if (g_nats_connected) {
+                const char *dir = d->ev_direction == EV_DIR_ABOVE ? "above" : "below";
+                snprintf(g_ev_json, sizeof(g_ev_json),
+                    "{\"event\":\"threshold\",\"device\":\"%s\",\"sensor\":\"%s\","
+                    "\"value\":%.1f,\"threshold\":%.1f,\"direction\":\"%s\","
+                    "\"unit\":\"%s\"}",
+                    cfg_device_name, d->name, val, d->ev_threshold, dir, d->unit);
+
+                snprintf(g_ev_subject, sizeof(g_ev_subject),
+                    "%s.events.%s", cfg_device_name, d->name);
+                natsClient.publish(g_ev_subject, g_ev_json);
+
+                if (g_debug)
+                    Serial.printf("[Event] %s: %.1f %s %s %.1f\n",
+                                  d->name, val, dir, dir, d->ev_threshold);
+            }
+        }
+    }
+}
+
+int eventsCount() {
+    int count = 0;
+    for (int i = 0; i < MAX_DEVICES; i++) {
+        if (g_devices[i].used && g_devices[i].ev_direction != EV_DIR_NONE)
+            count++;
+    }
+    return count;
 }
 
 /*============================================================================

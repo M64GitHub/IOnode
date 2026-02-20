@@ -22,8 +22,12 @@ extern char cfg_device_name[32];
 extern char cfg_nats_host[64];
 extern int  cfg_nats_port;
 extern char cfg_timezone[64];
+extern char cfg_tag[32];
+extern int  cfg_heartbeat_interval;
 extern bool g_nats_enabled;
 extern bool g_nats_connected;
+extern uint32_t g_nats_reconnects;
+extern uint32_t g_events_fired;
 extern bool g_reboot_pending;
 extern unsigned long g_reboot_at;
 
@@ -69,6 +73,18 @@ static int wcJsonGetInt(const char *json, const char *key, int default_val) {
     p += strlen(pattern);
     while (*p == ' ' || *p == ':') p++;
     return atoi(p);
+}
+
+static float wcJsonGetFloat(const char *json, const char *key, float default_val) {
+    char pattern[64];
+    snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+    const char *p = strstr(json, pattern);
+    if (!p) return default_val;
+    p += strlen(pattern);
+    while (*p == ' ' || *p == ':') p++;
+    char *end = nullptr;
+    float v = strtof(p, &end);
+    return (end != p) ? v : default_val;
 }
 
 static bool wcJsonGetBool(const char *json, const char *key, bool default_val) {
@@ -147,10 +163,11 @@ static void handleGetConfig() {
         "\"device_name\":\"%s\","
         "\"nats_host\":\"%s\","
         "\"nats_port\":\"%d\","
-        "\"timezone\":\"%s\""
+        "\"timezone\":\"%s\","
+        "\"tag\":\"%s\""
         "}",
         cfg_wifi_ssid, masked_pass, cfg_device_name,
-        cfg_nats_host, cfg_nats_port, cfg_timezone);
+        cfg_nats_host, cfg_nats_port, cfg_timezone, cfg_tag);
 
     server.send(200, "application/json", buf);
 }
@@ -172,13 +189,15 @@ static void handlePostConfig() {
         const char *key;
         char val[128];
     };
-    static Field fields[6];
+    static const int NUM_FIELDS = 8;
+    static Field fields[NUM_FIELDS];
     const char *keys[] = {
         "wifi_ssid", "wifi_pass", "device_name",
-        "nats_host", "nats_port", "timezone"
+        "nats_host", "nats_port", "timezone",
+        "tag", "heartbeat_interval"
     };
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_FIELDS; i++) {
         fields[i].key = keys[i];
         fields[i].val[0] = '\0';
 
@@ -199,10 +218,10 @@ static void handlePostConfig() {
     }
 
     f.print("{\n");
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_FIELDS; i++) {
         f.print("  \""); f.print(fields[i].key); f.print("\": ");
         wcWriteJsonEscaped(f, fields[i].val);
-        if (i < 5) f.print(",");
+        if (i < NUM_FIELDS - 1) f.print(",");
         f.print("\n");
     }
     f.print("}\n");
@@ -231,13 +250,18 @@ static void handleGetStatus() {
         "\"wifi_ssid\":\"%s\","
         "\"wifi_ip\":\"%s\","
         "\"wifi_rssi\":%d,"
-        "\"nats\":\"%s\""
+        "\"nats\":\"%s\","
+        "\"tag\":\"%s\","
+        "\"heartbeat_interval\":%d,"
+        "\"nats_reconnects\":%u,"
+        "\"events_fired\":%u"
         "}",
         IONODE_VERSION, cfg_device_name,
         days, hours, mins, secs, uptime,
         ESP.getFreeHeap(), ESP.getHeapSize(),
         cfg_wifi_ssid, WiFi.localIP().toString().c_str(), WiFi.RSSI(),
-        g_nats_enabled ? (g_nats_connected ? "connected" : "disconnected") : "disabled");
+        g_nats_enabled ? (g_nats_connected ? "connected" : "disconnected") : "disabled",
+        cfg_tag, cfg_heartbeat_interval, g_nats_reconnects, g_events_fired);
 
     server.send(200, "application/json", buf);
 }
@@ -328,6 +352,16 @@ static void handleGetDevices() {
             val_str, e_extra, e_msg,
             isInternalDevice(d->kind) ? "true" : "false",
             deviceIsActuator(d->kind) ? d->last_value : (int)deviceReadSensor(d));
+
+        /* Append event config for sensors with events */
+        if (d->ev_direction != EV_DIR_NONE) {
+            const char *dir = d->ev_direction == EV_DIR_ABOVE ? "above" : "below";
+            w += snprintf(buf + w, sizeof(buf) - w,
+                ",\"ev_threshold\":%.1f,\"ev_direction\":\"%s\","
+                "\"ev_cooldown\":%d,\"ev_armed\":%s",
+                d->ev_threshold, dir, d->ev_cooldown,
+                d->ev_armed ? "true" : "false");
+        }
 
         /* Append history array for sensors with recorded readings */
         int hcount = d->history_full ? DEV_HISTORY_LEN : d->history_idx;
@@ -454,6 +488,80 @@ static void handleSetDevice() {
     bool ok = deviceSetActuator(dev, value);
     server.send(ok ? 200 : 500, "application/json",
         ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"set failed\"}");
+}
+
+static void handleSetEvent() {
+    if (!server.hasArg("plain")) {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"no body\"}");
+        return;
+    }
+    const char *body = server.arg("plain").c_str();
+
+    char name[DEV_NAME_LEN];
+    if (!wcJsonGetString(body, "name", name, sizeof(name))) {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"missing name\"}");
+        return;
+    }
+
+    Device *dev = deviceFind(name);
+    if (!dev) {
+        server.send(404, "application/json", "{\"ok\":false,\"error\":\"not found\"}");
+        return;
+    }
+    if (!deviceIsSensor(dev->kind)) {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"not a sensor\"}");
+        return;
+    }
+
+    char dir_str[8] = "";
+    wcJsonGetString(body, "direction", dir_str, sizeof(dir_str));
+    uint8_t direction = EV_DIR_NONE;
+    if (strcmp(dir_str, "above") == 0) direction = EV_DIR_ABOVE;
+    else if (strcmp(dir_str, "below") == 0) direction = EV_DIR_BELOW;
+    else {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"direction must be above or below\"}");
+        return;
+    }
+
+    float threshold = wcJsonGetFloat(body, "threshold", 0.0f);
+
+    int cooldown = wcJsonGetInt(body, "cooldown", 10);
+
+    dev->ev_threshold = threshold;
+    dev->ev_direction = direction;
+    dev->ev_cooldown = (uint16_t)constrain(cooldown, 1, 65535);
+    dev->ev_armed = true;
+    dev->ev_last_fire_ms = 0;
+
+    devicesMarkDirty();
+    server.send(200, "application/json", "{\"ok\":true}");
+}
+
+static void handleClearEvent() {
+    if (!server.hasArg("plain")) {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"no body\"}");
+        return;
+    }
+    char name[DEV_NAME_LEN];
+    if (!wcJsonGetString(server.arg("plain").c_str(), "name", name, sizeof(name))) {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"missing name\"}");
+        return;
+    }
+
+    Device *dev = deviceFind(name);
+    if (!dev) {
+        server.send(404, "application/json", "{\"ok\":false,\"error\":\"not found\"}");
+        return;
+    }
+
+    dev->ev_direction = EV_DIR_NONE;
+    dev->ev_threshold = 0.0f;
+    dev->ev_cooldown = 0;
+    dev->ev_armed = false;
+    dev->ev_last_fire_ms = 0;
+
+    devicesMarkDirty();
+    server.send(200, "application/json", "{\"ok\":true}");
 }
 
 static void handleGetDevicesJson() {
@@ -652,6 +760,7 @@ nav button{padding:0.4rem 0.6rem;font-size:0.8rem}
 </style></head><body>
 <div class="wrap">
 <header>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" rx="4" stroke="var(--accent)" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="var(--accent)"/><line x1="16" y1="4" x2="16" y2="10" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="22" x2="16" y2="28" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="16" x2="10" y2="16" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/><line x1="22" y1="16" x2="28" y2="16" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/></svg>
 <h1>IOnode</h1>
 <span class="ver" id="hdr-ver"></span>
 </header>
@@ -680,6 +789,10 @@ nav button{padding:0.4rem 0.6rem;font-size:0.8rem}
 <label>Timezone</label>
 <input type="text" id="c_timezone">
 <p class="hint">POSIX TZ string, e.g. CET-1CEST,M3.5.0,M10.5.0/3</p>
+<div class="sep"></div>
+<label>Tag</label>
+<input type="text" id="c_tag" placeholder="e.g. greenhouse">
+<p class="hint">Group tag for fleet discovery via _ion.group.{tag}</p>
 <div class="actions">
 <button class="btn btn-primary" onclick="saveConfig()">Save Config</button>
 <button class="btn btn-danger" onclick="reboot()">Reboot</button>
@@ -794,7 +907,7 @@ document.getElementById(id).classList.add('active');
 if(btn)btn.classList.add('active');
 if(devTimer){clearInterval(devTimer);devTimer=null}
 if(id==='status')loadStatus();
-if(id==='devices'){loadDevices();devTimer=setInterval(loadDevices,3000)}
+if(id==='devices'){loadDevices();devTimer=setInterval(function(){var a=document.activeElement;if(a&&a.closest&&a.closest('#devices-list'))return;loadDevices()},3000)}
 if(id==='config')djLoad();
 }
 function toast(msg,ok){
@@ -804,12 +917,12 @@ setTimeout(function(){t.className='toast'},2500);
 }
 function loadConfig(){
 fetch('/api/config').then(function(r){return r.json()}).then(function(d){
-var f=['wifi_ssid','wifi_pass','device_name','nats_host','nats_port','timezone'];
+var f=['wifi_ssid','wifi_pass','device_name','nats_host','nats_port','timezone','tag'];
 f.forEach(function(k){var el=document.getElementById('c_'+k);if(el)el.value=d[k]||''});
 }).catch(function(){toast('Failed to load config',false)});
 }
 function saveConfig(){
-var f=['wifi_ssid','wifi_pass','device_name','nats_host','nats_port','timezone'];
+var f=['wifi_ssid','wifi_pass','device_name','nats_host','nats_port','timezone','tag'];
 var d={};f.forEach(function(k){d[k]=document.getElementById('c_'+k).value});
 fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify(d)}).then(function(r){return r.json()}).then(function(j){
@@ -899,6 +1012,17 @@ if(d.pin!=='virtual')h+='<div class="dev-meta">pin '+d.pin+'</div>';
 else if(d.extra)h+='<div class="dev-meta">'+d.extra+'</div>';
 h+='<div class="dev-meta">'+d.value+'</div>';
 if(d.msg)h+='<div class="dev-meta" style="color:var(--text3)">"'+d.msg+'"</div>';
+if(d.ev_direction){
+h+='<div class="dev-meta" style="color:var(--accent)">Event: '+d.ev_direction+' '+d.ev_threshold+' (cd:'+d.ev_cooldown+'s) '+(d.ev_armed?'[armed]':'[fired]')+'</div>';
+h+='<div class="toggle-wrap"><button class="toggle-btn off-active" onclick="clearEvent(\''+d.name+'\')">Clear Event</button></div>';
+}else{
+h+='<div class="ev-form" style="margin-top:0.5rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">';
+h+='<select id="ev_d_'+d.name+'" style="width:auto;padding:0.3rem 0.5rem;font-size:0.75rem"><option value="above">above</option><option value="below">below</option></select>';
+h+='<input type="number" id="ev_t_'+d.name+'" placeholder="threshold" style="width:5rem;padding:0.3rem 0.5rem;font-size:0.75rem" step="0.1">';
+h+='<input type="number" id="ev_cd_'+d.name+'" placeholder="cd(s)" value="10" style="width:4rem;padding:0.3rem 0.5rem;font-size:0.75rem" min="1">';
+h+='<button class="toggle-btn" onclick="setEvent(\''+d.name+'\')" style="font-size:0.75rem;padding:0.3rem 0.6rem">Set Event</button>';
+h+='</div>';
+}
 }
 if(d.hist&&d.hist.length>1){var mn=Math.min.apply(null,d.hist),mx=Math.max.apply(null,d.hist),rng=mx-mn||1,bars='';d.hist.forEach(function(v){var pct=Math.round(((v-mn)/rng)*100);bars+='<span class="spark-bar" style="height:'+Math.max(pct,5)+'%"></span>'});h+='<div class="spark">'+bars+'</div>'}
 h+='</div>'});
@@ -929,8 +1053,27 @@ toast(j.ok?'Deleted':(j.error||'Failed'),j.ok);
 if(j.ok){loadDevices();djLoad()}
 }).catch(function(){toast('Delete failed',false)});
 }
+function setEvent(name){
+var dir=document.getElementById('ev_d_'+name).value;
+var thr=parseFloat(document.getElementById('ev_t_'+name).value);
+var cd=parseInt(document.getElementById('ev_cd_'+name).value)||10;
+if(isNaN(thr)){toast('Threshold required',false);return}
+fetch('/api/devices/event',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({name:name,direction:dir,threshold:thr,cooldown:cd})}).then(function(r){return r.json()}).then(function(j){
+toast(j.ok?'Event set':(j.error||'Failed'),j.ok);
+if(j.ok)loadDevices();
+}).catch(function(){toast('Set event failed',false)});
+}
+function clearEvent(name){
+fetch('/api/devices/event/clear',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({name:name})}).then(function(r){return r.json()}).then(function(j){
+toast(j.ok?'Event cleared':(j.error||'Failed'),j.ok);
+if(j.ok)loadDevices();
+}).catch(function(){toast('Clear event failed',false)});
+}
 function loadStatus(){
 fetch('/api/status').then(function(r){return r.json()}).then(function(d){
+var hb=d.heartbeat_interval>0?'every '+d.heartbeat_interval+'s':'disabled';
 var items=[
 {l:'Version',v:d.version,cls:'accent'},
 {l:'Device',v:d.device_name},
@@ -938,7 +1081,11 @@ var items=[
 {l:'Heap',v:Math.round(d.heap_free/1024)+'KB / '+Math.round(d.heap_total/1024)+'KB'},
 {l:'WiFi',v:d.wifi_ssid+' ('+d.wifi_rssi+'dBm)',full:true},
 {l:'IP Address',v:d.wifi_ip,cls:'accent'},
-{l:'NATS',v:d.nats}
+{l:'NATS',v:d.nats},
+{l:'Tag',v:d.tag||'(none)'},
+{l:'Heartbeat',v:hb},
+{l:'NATS Reconnects',v:d.nats_reconnects},
+{l:'Events Fired',v:d.events_fired}
 ];
 var h='';items.forEach(function(i){
 h+='<div class="status-item'+(i.full?' full':'')+'"><div class="label">'+i.l+
@@ -1007,6 +1154,8 @@ void webConfigSetup() {
     server.on("/api/devices/delete", HTTP_POST, handleDeleteDevice);
     server.on("/api/devices/add", HTTP_POST, handleAddDevice);
     server.on("/api/devices/set", HTTP_POST, handleSetDevice);
+    server.on("/api/devices/event", HTTP_POST, handleSetEvent);
+    server.on("/api/devices/event/clear", HTTP_POST, handleClearEvent);
     server.on("/api/devices/json", HTTP_GET, handleGetDevicesJson);
     server.on("/api/devices/json", HTTP_POST, handlePostDevicesJson);
     server.on("/api/pins", HTTP_POST, handlePins);

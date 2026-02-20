@@ -18,6 +18,7 @@
 #endif
 #include "devices.h"
 #include "nats_hal.h"
+#include "nats_config.h"
 #include "setup_portal.h"
 #include "web_config.h"
 #include "version.h"
@@ -39,6 +40,8 @@ char cfg_device_name[32];
 char cfg_nats_host[64];
 int  cfg_nats_port = 4222;
 char cfg_timezone[64];
+char cfg_tag[32];
+int  cfg_heartbeat_interval = 60;
 
 static void configDefaults() {
     cfg_wifi_ssid[0] = '\0';
@@ -47,6 +50,8 @@ static void configDefaults() {
     cfg_nats_host[0] = '\0';
     cfg_nats_port = 4222;
     strncpy(cfg_timezone, "UTC0", sizeof(cfg_timezone));
+    cfg_tag[0] = '\0';
+    cfg_heartbeat_interval = 60;
 }
 
 /*============================================================================
@@ -80,6 +85,16 @@ void ledCyan()   { led(0, 255, 255); }
 bool g_debug = false;
 bool g_reboot_pending = false;
 unsigned long g_reboot_at = 0;
+
+/* Debounced save flags — set by subsystems, flushed in loop() */
+bool g_devices_dirty = false;
+unsigned long g_devices_dirty_ms = 0;
+bool g_config_dirty = false;
+unsigned long g_config_dirty_ms = 0;
+
+/* Telemetry counters */
+uint32_t g_nats_reconnects = 0;
+uint32_t g_events_fired = 0;
 #if !defined(CONFIG_IDF_TARGET_ESP32)
 temperature_sensor_handle_t g_temp_sensor = NULL;
 #endif
@@ -161,11 +176,80 @@ static bool loadConfig() {
             cfg_nats_port = atoi(port_buf);
         }
         jsonGetString(json_buf, "timezone", cfg_timezone, sizeof(cfg_timezone));
+        jsonGetString(json_buf, "tag", cfg_tag, sizeof(cfg_tag));
+        char hb_buf[8];
+        if (jsonGetString(json_buf, "heartbeat_interval", hb_buf, sizeof(hb_buf))) {
+            cfg_heartbeat_interval = atoi(hb_buf);
+        }
     } else {
         Serial.printf("LittleFS: no config.json, using defaults\n");
     }
 
     return true;
+}
+
+/*============================================================================
+ * Config Save — writes all cfg_ globals back to /config.json
+ *============================================================================*/
+
+static int jsonEscapeStr(char *dst, int dst_len, const char *src) {
+    int w = 0;
+    for (int i = 0; src[i] && w < dst_len - 2; i++) {
+        char c = src[i];
+        if (c == '"' || c == '\\') {
+            if (w + 2 >= dst_len) break;
+            dst[w++] = '\\'; dst[w++] = c;
+        } else if (c == '\n') {
+            if (w + 2 >= dst_len) break;
+            dst[w++] = '\\'; dst[w++] = 'n';
+        } else if ((uint8_t)c >= 0x20) {
+            dst[w++] = c;
+        }
+    }
+    dst[w] = '\0';
+    return w;
+}
+
+void configSave() {
+    File f = LittleFS.open("/config.json", "w");
+    if (!f) {
+        Serial.printf("configSave: write failed\n");
+        return;
+    }
+
+    static char buf[640];
+    char esc[128];
+    int w = 0;
+
+    w += snprintf(buf + w, sizeof(buf) - w, "{\n");
+
+    jsonEscapeStr(esc, sizeof(esc), cfg_wifi_ssid);
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"wifi_ssid\": \"%s\",\n", esc);
+
+    jsonEscapeStr(esc, sizeof(esc), cfg_wifi_pass);
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"wifi_pass\": \"%s\",\n", esc);
+
+    jsonEscapeStr(esc, sizeof(esc), cfg_device_name);
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"device_name\": \"%s\",\n", esc);
+
+    jsonEscapeStr(esc, sizeof(esc), cfg_nats_host);
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"nats_host\": \"%s\",\n", esc);
+
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"nats_port\": \"%d\",\n", cfg_nats_port);
+
+    jsonEscapeStr(esc, sizeof(esc), cfg_timezone);
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"timezone\": \"%s\",\n", esc);
+
+    jsonEscapeStr(esc, sizeof(esc), cfg_tag);
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"tag\": \"%s\",\n", esc);
+
+    w += snprintf(buf + w, sizeof(buf) - w, "  \"heartbeat_interval\": \"%d\"\n", cfg_heartbeat_interval);
+
+    w += snprintf(buf + w, sizeof(buf) - w, "}\n");
+
+    f.print(buf);
+    f.close();
+    Serial.printf("configSave: saved (%d bytes)\n", w);
 }
 
 /*============================================================================
@@ -208,6 +292,9 @@ static unsigned long natsLastReconnect = 0;
 
 static char natsSubjectCapabilities[64];
 static char natsSubjectHal[64];
+static char natsSubjectConfig[64];
+static char natsSubjectGroup[64];
+static uint16_t natsGroupSid = 0;
 static const char natsSubjectDiscover[] = "_ion.discover";
 
 /* Capabilities response buffer */
@@ -220,6 +307,7 @@ static void onNatsEvent(nats_client_t *client, nats_event_t event,
     case NATS_EVENT_CONNECTED:
         Serial.printf("NATS: connected\n");
         g_nats_connected = true;
+        g_nats_reconnects++;
         break;
     case NATS_EVENT_DISCONNECTED:
         Serial.printf("NATS: disconnected\n");
@@ -261,6 +349,12 @@ static void onNatsCapabilities(nats_client_t *client, const nats_msg_t *msg,
         "\"chip\":\"%s\",\"free_heap\":%u,\"ip\":\"%s\",",
         cfg_device_name, IONODE_VERSION, chip_name, ESP.getFreeHeap(),
         WiFi.localIP().toString().c_str());
+
+    /* Include tag if set */
+    if (cfg_tag[0]) {
+        w += snprintf(g_caps_json + w, sizeof(g_caps_json) - w,
+            "\"tag\":\"%s\",", cfg_tag);
+    }
 
     /* HAL capabilities */
     w += snprintf(g_caps_json + w, sizeof(g_caps_json) - w,
@@ -354,6 +448,45 @@ static void buildNatsSubjects() {
              "%s.capabilities", cfg_device_name);
     snprintf(natsSubjectHal, sizeof(natsSubjectHal),
              "%s.hal.>", cfg_device_name);
+    snprintf(natsSubjectConfig, sizeof(natsSubjectConfig),
+             "%s.config.>", cfg_device_name);
+    if (cfg_tag[0]) {
+        snprintf(natsSubjectGroup, sizeof(natsSubjectGroup),
+                 "_ion.group.%s", cfg_tag);
+    } else {
+        natsSubjectGroup[0] = '\0';
+    }
+}
+
+/**
+ * Re-subscribe group topic when tag changes at runtime.
+ * Called from nats_config.cpp cfgTagSet().
+ */
+void natsGroupResubscribe(const char *old_tag, const char *new_tag) {
+    if (!g_nats_connected) return;
+
+    /* Unsub old group */
+    if (natsGroupSid != 0) {
+        natsClient.unsubscribe(natsGroupSid);
+        Serial.printf("[NATS] Unsubscribed group (sid=%d)\n", natsGroupSid);
+        natsGroupSid = 0;
+    }
+
+    /* Sub new group */
+    if (new_tag && new_tag[0]) {
+        snprintf(natsSubjectGroup, sizeof(natsSubjectGroup),
+                 "_ion.group.%s", new_tag);
+        uint16_t sid = 0;
+        nats_err_t err = natsClient.subscribe(natsSubjectGroup,
+                                               onNatsCapabilities, nullptr, &sid);
+        if (err == NATS_OK) {
+            natsGroupSid = sid;
+            Serial.printf("[NATS] Subscribed group: %s (sid=%d)\n",
+                          natsSubjectGroup, sid);
+        }
+    } else {
+        natsSubjectGroup[0] = '\0';
+    }
 }
 
 static bool connectNats() {
@@ -386,6 +519,24 @@ static bool connectNats() {
                       natsSubjectHal, nats_err_str(err));
     }
 
+    err = natsClient.subscribe(natsSubjectConfig, onNatsConfig, nullptr);
+    if (err != NATS_OK) {
+        Serial.printf("NATS: subscribe %s failed: %s\n",
+                      natsSubjectConfig, nats_err_str(err));
+    }
+
+    /* Subscribe to group topic if tag is set */
+    if (natsSubjectGroup[0]) {
+        uint16_t gsid = 0;
+        err = natsClient.subscribe(natsSubjectGroup, onNatsCapabilities,
+                                    nullptr, &gsid);
+        if (err == NATS_OK) {
+            natsGroupSid = gsid;
+            Serial.printf("NATS: subscribed group: %s (sid=%d)\n",
+                          natsSubjectGroup, gsid);
+        }
+    }
+
     /* Publish online event */
     static char onlineMsg[256];
     snprintf(onlineMsg, sizeof(onlineMsg),
@@ -399,13 +550,55 @@ static bool connectNats() {
     snprintf(eventsSubject, sizeof(eventsSubject), "%s.events", cfg_device_name);
     natsClient.publish(eventsSubject, onlineMsg);
 
-    Serial.printf("NATS: subscribed to %s, %s, %s\n",
-                  natsSubjectCapabilities, natsSubjectDiscover, natsSubjectHal);
+    Serial.printf("NATS: subscribed to %s, %s, %s, %s\n",
+                  natsSubjectCapabilities, natsSubjectDiscover,
+                  natsSubjectHal, natsSubjectConfig);
 
     /* Subscribe NATS virtual sensors */
     natsSubscribeDeviceSensors();
 
     return true;
+}
+
+/*============================================================================
+ * Heartbeat — periodic health publish to _ion.heartbeat
+ *============================================================================*/
+
+static char g_hb_json[512];
+static unsigned long lastHeartbeatPublish = 0;
+
+static void publishHeartbeat() {
+    int sensors = 0, actuators = 0;
+    Device *devs = deviceGetAll();
+    for (int i = 0; i < MAX_DEVICES; i++) {
+        if (!devs[i].used) continue;
+        if (deviceIsSensor(devs[i].kind)) sensors++;
+        else actuators++;
+    }
+
+    int w = 0;
+    w += snprintf(g_hb_json + w, sizeof(g_hb_json) - w,
+        "{\"device\":\"%s\",", cfg_device_name);
+    if (cfg_tag[0])
+        w += snprintf(g_hb_json + w, sizeof(g_hb_json) - w,
+            "\"tag\":\"%s\",", cfg_tag);
+    w += snprintf(g_hb_json + w, sizeof(g_hb_json) - w,
+        "\"version\":\"%s\","
+        "\"uptime\":%lu,"
+        "\"heap\":%u,"
+        "\"rssi\":%d,"
+        "\"nats_reconnects\":%u,"
+        "\"sensors\":%d,"
+        "\"actuators\":%d,"
+        "\"events_fired\":%u}",
+        IONODE_VERSION, millis() / 1000,
+        ESP.getFreeHeap(), WiFi.RSSI(),
+        g_nats_reconnects, sensors, actuators, g_events_fired);
+
+    natsClient.publish("_ion.heartbeat", g_hb_json);
+
+    if (g_debug)
+        Serial.printf("[Heartbeat] published (%d bytes)\n", w);
 }
 
 /*============================================================================
@@ -622,6 +815,34 @@ void loop() {
 
     /* Keep sensor EMA values warm (every 10s) + history (every 5min) */
     sensorsPoll();
+
+    /* Check event thresholds every 1 second */
+    {
+        static unsigned long lastEventsCheck = 0;
+        if (now - lastEventsCheck >= 1000) {
+            lastEventsCheck = now;
+            eventsCheck();
+        }
+    }
+
+    /* Debounced saves — flush dirty flags after delay */
+    if (g_devices_dirty && (now - g_devices_dirty_ms >= 5000)) {
+        devicesSave();
+        g_devices_dirty = false;
+    }
+    if (g_config_dirty && (now - g_config_dirty_ms >= 2000)) {
+        configSave();
+        g_config_dirty = false;
+    }
+
+    /* Heartbeat publish */
+    if (g_nats_connected && cfg_heartbeat_interval > 0) {
+        unsigned long hb_interval_ms = (unsigned long)cfg_heartbeat_interval * 1000;
+        if (now - lastHeartbeatPublish >= hb_interval_ms) {
+            lastHeartbeatPublish = now;
+            publishHeartbeat();
+        }
+    }
 
     /* Read serial input character by character */
     while (Serial.available()) {

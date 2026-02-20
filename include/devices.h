@@ -59,7 +59,19 @@ struct Device {
     float       history[DEV_HISTORY_LEN];
     uint8_t     history_idx;
     bool        history_full;
+    /* Event config (persisted as flat keys in devices.json) */
+    float       ev_threshold;
+    uint8_t     ev_direction;     /* 0=none, 1=above, 2=below */
+    uint16_t    ev_cooldown;      /* seconds */
+    /* Event runtime (RAM only) */
+    bool        ev_armed;
+    uint32_t    ev_last_fire_ms;
 };
+
+/* Event direction constants */
+#define EV_DIR_NONE   0
+#define EV_DIR_ABOVE  1
+#define EV_DIR_BELOW  2
 
 /* Initialize device registry - loads from /devices.json, auto-registers chip_temp */
 void devicesInit();
@@ -69,6 +81,9 @@ void sensorsPoll();
 
 /* Persist device registry to /devices.json */
 void devicesSave();
+
+/* Mark device registry dirty — triggers debounced save in main loop */
+void devicesMarkDirty();
 
 /* Clear all devices (deinits serial_text if active, zeroes array) */
 void devicesClear();
@@ -146,5 +161,11 @@ bool serialTextActive();
 
 /* Returns true if the rgb_led device is set to a non-zero color (suppresses heartbeat) */
 bool rgbLedOverride();
+
+/* Check all sensor events and fire NATS notifications on threshold crossing */
+void eventsCheck();
+
+/* Count sensors with events configured */
+int eventsCount();
 
 #endif /* DEVICES_H */

@@ -7,6 +7,8 @@
  */
 
 #include <Arduino.h>
+#include <WiFi.h>
+#include <esp_system.h>
 #include "nats_hal.h"
 #include "devices.h"
 #include "soc/soc_caps.h"
@@ -18,6 +20,7 @@ extern temperature_sensor_handle_t g_temp_sensor;
 /* Externs from main.cpp */
 extern char cfg_device_name[32];
 extern bool g_debug;
+extern uint32_t g_nats_reconnects;
 
 /* Own JSON buffer for device list handler (replaces WireClaw's toolCallJsonBuf) */
 static char g_hal_json[2048];
@@ -277,9 +280,27 @@ static void halSystem(nats_client_t *client, const nats_msg_t *msg,
         snprintf(g_hal_reply, sizeof(g_hal_reply), "%u", ESP.getFreeHeap());
     } else if (strcmp(rest, "uptime") == 0) {
         snprintf(g_hal_reply, sizeof(g_hal_reply), "%lu", millis() / 1000);
+    } else if (strcmp(rest, "rssi") == 0) {
+        snprintf(g_hal_reply, sizeof(g_hal_reply), "%d", WiFi.RSSI());
+    } else if (strcmp(rest, "reset_reason") == 0) {
+        const char *reason;
+        switch (esp_reset_reason()) {
+            case ESP_RST_POWERON:   reason = "power_on"; break;
+            case ESP_RST_SW:        reason = "software"; break;
+            case ESP_RST_PANIC:     reason = "panic"; break;
+            case ESP_RST_INT_WDT:   reason = "int_watchdog"; break;
+            case ESP_RST_TASK_WDT:  reason = "task_watchdog"; break;
+            case ESP_RST_WDT:       reason = "watchdog"; break;
+            case ESP_RST_DEEPSLEEP: reason = "deep_sleep"; break;
+            case ESP_RST_BROWNOUT:  reason = "brownout"; break;
+            default:                reason = "unknown"; break;
+        }
+        snprintf(g_hal_reply, sizeof(g_hal_reply), "%s", reason);
+    } else if (strcmp(rest, "nats_reconnects") == 0) {
+        snprintf(g_hal_reply, sizeof(g_hal_reply), "%u", g_nats_reconnects);
     } else {
         halError(client, msg, "bad_key",
-                 "use temperature, heap, or uptime");
+                 "use temperature, heap, uptime, rssi, reset_reason, or nats_reconnects");
         return;
     }
 

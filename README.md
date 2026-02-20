@@ -55,7 +55,9 @@ Or create `data/config.json` before flashing:
   "device_name": "ionode-01",
   "nats_host": "192.168.1.100",
   "nats_port": "4222",
-  "timezone": "CET-1CEST,M3.5.0,M10.5.0/3"
+  "timezone": "CET-1CEST,M3.5.0,M10.5.0/3",
+  "tag": "",
+  "heartbeat_interval": "60"
 }
 ```
 
@@ -113,7 +115,7 @@ Direct hardware access without registering a device. Pick a pin number, a type (
 
 ### Status tab
 
-Version, device name, uptime, heap, WiFi SSID + signal strength, IP address, NATS connection state.
+Version, device name, uptime, heap, WiFi SSID + signal strength, IP address, NATS connection state, fleet tag, heartbeat interval, NATS reconnect count, and events fired.
 
 ---
 
@@ -136,6 +138,9 @@ All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are 
 | `{name}.hal.system.temperature` | - | `38.1` | Chip temp in C |
 | `{name}.hal.system.heap` | - | `156000` | Free heap bytes |
 | `{name}.hal.system.uptime` | - | `3600` | Seconds since boot |
+| `{name}.hal.system.rssi` | - | `-52` | WiFi signal strength |
+| `{name}.hal.system.reset_reason` | - | `software` | Last reset reason |
+| `{name}.hal.system.nats_reconnects` | - | `1` | NATS reconnect count |
 | `{name}.hal.device.list` | - | JSON array | All registered devices + values |
 
 ### Registered Devices (plugin sensors/actuators)
@@ -149,12 +154,31 @@ Any device registered in `devices.json` is automatically routed under `{name}.ha
 | `{name}.hal.{dev}.set` | value | `ok` (actuators only) |
 | `{name}.hal.{dev}.info` | - | JSON: name, kind, value, pin, unit |
 
-### Discovery & Capabilities
+### Discovery & Fleet
 
-| Subject | Response |
-|---------|----------|
-| `_ion.discover` | Capabilities JSON (all nodes respond) |
-| `{name}.capabilities` | Capabilities JSON (single node) |
+| Subject | Payload | Response | Notes |
+|---------|---------|----------|-------|
+| `_ion.discover` | - | Capabilities JSON | All nodes respond |
+| `{name}.capabilities` | - | Capabilities JSON | Single node |
+| `_ion.group.{tag}` | - | Capabilities JSON | All nodes with matching tag respond |
+| `_ion.heartbeat` | _(subscribe)_ | Health JSON | Periodic, default every 60s |
+| `{name}.events.{sensor}` | _(subscribe)_ | Threshold event JSON | Edge-detected alerts |
+
+### Remote Configuration
+
+| Subject | Payload | Response | Notes |
+|---------|---------|----------|-------|
+| `{name}.config.get` | - | Config JSON | WiFi password excluded |
+| `{name}.config.device.list` | - | JSON array | All registered devices |
+| `{name}.config.device.add` | `{"n":"x","k":"relay","p":5,"u":"","i":false}` | `{"ok":true}` | Register a device |
+| `{name}.config.device.remove` | `{"n":"x"}` | `{"ok":true}` | Remove a device |
+| `{name}.config.tag.set` | `greenhouse` | `{"ok":true}` | Set fleet tag |
+| `{name}.config.tag.get` | - | `{"tag":"greenhouse"}` | Get current tag |
+| `{name}.config.heartbeat.set` | `60` | `{"ok":true}` | 0-3600s, 0=disabled |
+| `{name}.config.event.set` | `{"n":"x","t":28,"d":"above","cd":10}` | `{"ok":true}` | Configure threshold event |
+| `{name}.config.event.clear` | `{"n":"x"}` | `{"ok":true}` | Remove threshold event |
+| `{name}.config.event.list` | - | JSON array | List configured events |
+| `{name}.config.name.set` | `new-name` | `{"ok":true}` | Rename node (reboots) |
 
 Capabilities response:
 
@@ -162,10 +186,11 @@ Capabilities response:
 {
   "device": "ionode-01",
   "firmware": "ionode",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "chip": "ESP32-C6",
   "free_heap": 156000,
   "ip": "192.168.1.42",
+  "tag": "greenhouse",
   "hal": {
     "gpio": true, "adc": true, "pwm": true,
     "dac": false, "uart": true, "system_temp": true
@@ -176,6 +201,54 @@ Capabilities response:
   ]
 }
 ```
+
+---
+
+## Fleet Management
+
+IOnode supports fleet-level operations — tagging, group queries, health monitoring, threshold alerts, and full remote configuration — all via NATS. No reflash, no web UI required.
+
+### Tags & Group Discovery
+
+Tag nodes for fleet grouping. Tagged nodes subscribe to `_ion.group.{tag}` and respond to group queries with their full capabilities:
+
+```bash
+nats req ionode-01.config.tag.set 'greenhouse'
+nats req _ion.group.greenhouse ''              # all greenhouse nodes respond
+```
+
+Tags can be changed at runtime without reboot — the group subscription updates live. Tags appear in discovery responses and the Status tab.
+
+### Health Heartbeat
+
+Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s, configurable 0–3600, 0 disables):
+
+```json
+{
+  "device": "ionode-01", "tag": "greenhouse", "version": "0.2.0",
+  "uptime": 3600, "heap": 245000, "rssi": -52,
+  "nats_reconnects": 0, "sensors": 4, "actuators": 2, "events_fired": 3
+}
+```
+
+### Threshold Events
+
+Sensors (including internal chip temperature) can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown — fires once on crossing, re-arms when the value returns to the safe side:
+
+```bash
+nats req ionode-01.config.event.set '{"n":"chip_temp","t":45,"d":"above","cd":30}'
+nats sub 'ionode-01.events.>'
+```
+
+Events persist across reboots. Configurable via NATS, web API, and the web UI device cards.
+
+### Actuator State Persistence
+
+Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB are excluded — resuming a PWM mid-value on boot could be dangerous.
+
+### Remote Configuration
+
+The full device registry, tags, heartbeat, and events can be managed remotely via `{name}.config.>` NATS subjects — see the [NATS Subject Reference](#nats-subject-reference) above.
 
 ---
 
@@ -465,12 +538,14 @@ IOnode/
 |   +-- version.h           IONODE_VERSION
 |   +-- devices.h           Device registry structs & API
 |   +-- nats_hal.h          HAL NATS handler
+|   +-- nats_config.h       Remote config NATS handler
 |   +-- web_config.h        Web UI server
 |   +-- setup_portal.h      Config portal
 +-- src/
 |   +-- main.cpp            Setup, loop, NATS, serial commands
-|   +-- devices.cpp         Registry, sensor reading, persistence
+|   +-- devices.cpp         Registry, sensor reading, persistence, events engine
 |   +-- nats_hal.cpp        HAL request router (gpio/adc/pwm/uart/system)
+|   +-- nats_config.cpp     Remote config router (config.> subjects)
 |   +-- web_config.cpp      Web UI server + REST API + PROGMEM HTML/JS
 |   +-- setup_portal.cpp    WiFi AP + captive portal + config form
 +-- lib/nats/               nats_atoms - embedded NATS client library
