@@ -17,7 +17,7 @@ metadata:
       - IONODE_NATS_URL
 ---
 
-# IOnode — NATS-Addressable Hardware Nodes for OpenClaw
+# IOnode - NATS-Addressable Hardware Nodes for OpenClaw
 
 IOnode turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin,
 ADC channel, sensor, and actuator becomes reachable via request/reply over NATS.
@@ -29,7 +29,7 @@ ADC channel, sensor, and actuator becomes reachable via request/reply over NATS.
 ## Prerequisites
 
 ### Required
-- **`nats` CLI** — https://github.com/nats-io/natscli (must be in PATH)
+- **`nats` CLI** - https://github.com/nats-io/natscli (must be in PATH)
 - **NATS server** accessible from both OpenClaw and IOnode devices (default port 4222)
 - One or more IOnode devices on the same network
 
@@ -53,7 +53,7 @@ command -v ionode >/dev/null 2>&1 && echo "ionode CLI available" || echo "ionode
 > sudo ln -sf "$(pwd)/IOnode/cli/ionode" /usr/local/bin/ionode
 > ```
 >
-> I can use raw `nats req` commands in the meantime — everything still works.
+> I can use raw `nats req` commands in the meantime - everything still works.
 
 **If `ionode` IS installed**, prefer it over raw `nats req` for all operations.
 
@@ -75,7 +75,7 @@ The `ionode` CLI and raw `nats` commands both respect this variable.
 # Discovery & monitoring
 ionode discover                           # find all nodes on the network
 ionode ls                                 # compact fleet table
-ionode info <device>                      # deep dive — health, HAL, devices
+ionode info <device>                      # deep dive - health, HAL, devices
 ionode status <device>                    # quick health check
 ionode watch                              # live heartbeat + event stream
 ionode watch --tag <tag>                  # monitor a tagged group
@@ -142,7 +142,7 @@ nats req <device>.hal.device.list "" --server "$NATS_URL"
 
 ## Core HAL Subjects
 
-These are always available on every IOnode — no registration required.
+These are always available on every IOnode - no registration required.
 
 ### GPIO
 ```bash
@@ -227,11 +227,11 @@ ionode read ionode-01 light                 # → 67.2
 | `rgb_led` | Built-in RGB LED, packed 0xRRGGBB value |
 
 ### Pre-registered Devices (always available)
-- `chip_temp` — internal chip temperature in °C
-- `clock_hour` — current hour (0–23)
-- `clock_minute` — current minute (0–59)
-- `clock_hhmm` — time as HHMM (e.g. 1830)
-- `rgb_led` — built-in RGB LED (boards with RGB LED only)
+- `chip_temp` - internal chip temperature in °C
+- `clock_hour` - current hour (0–23)
+- `clock_minute` - current minute (0–59)
+- `clock_hhmm` - time as HHMM (e.g. 1830)
+- `rgb_led` - built-in RGB LED (boards with RGB LED only)
 
 ### Registering New Devices
 
@@ -259,7 +259,7 @@ nats req ionode-01.config.tag.set 'greenhouse'
 nats req _ion.group.greenhouse ''           # all tagged nodes respond
 ```
 
-Tags update live — no reboot needed.
+Tags update live - no reboot needed.
 
 ### Health Heartbeats
 
@@ -291,7 +291,7 @@ Edge-detected with configurable cooldown. Events persist across reboots.
 
 ### Remote Configuration
 
-All configuration is available over NATS — add/remove devices, set tags,
+All configuration is available over NATS - add/remove devices, set tags,
 configure events, rename nodes. No reflash needed.
 
 Full protocol reference: https://github.com/M64GitHub/IOnode/blob/main/docs/NATS-API.md
@@ -313,7 +313,7 @@ websocket {
 
 ## Automation Patterns
 
-IOnode has no on-device rule engine. Automation logic runs here in OpenClaw —
+IOnode has no on-device rule engine. Automation logic runs here in OpenClaw -
 as shell scripts, background jobs, or monitoring loops. This is intentional:
 the logic lives where it can be updated and extended without reflashing.
 
@@ -399,7 +399,7 @@ Users cannot name their devices any of these words:
 
 - Always discover nodes first (`ionode discover`) if you don't know what's on the network.
 - All NATS responses are plain strings (bare floats, "ok", "0"/"1") or JSON.
-- IOnode has no rule engine — all automation logic runs here in OpenClaw.
+- IOnode has no rule engine - all automation logic runs here in OpenClaw.
 - The on-device web UI at `http://{device-ip}/` is useful for manual control
   and adding/removing devices without reflashing.
 - NATS server must be accessible from both OpenClaw and the IOnode devices.

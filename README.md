@@ -4,13 +4,13 @@
 
 **Flash any ESP32. It speaks NATS.**
 
-**[ionode.io](https://ionode.io)** - Website &amp; docs &nbsp;|&nbsp; **[Flash from browser](https://ionode.io/flash.html)**
-
 IOnode turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator becomes reachable over the network via simple request/reply. No SDK, no cloud, no account.
 
 Flash it, name it, point it at a NATS server - done. Read sensors from a script, toggle relays from the CLI, monitor your fleet from a web dashboard, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) for natural language control. The intelligence lives wherever you want it. IOnode just makes the hardware available.
 
 **Supported chips:** ESP32-C6 · ESP32-S3 · ESP32-C3 · ESP32
+
+[ionode.io](https://ionode.io) | [Flash from browser](https://ionode.io/flash.html)
 
 ```
 Your laptop / server / Raspberry Pi
