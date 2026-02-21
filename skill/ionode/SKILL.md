@@ -17,187 +17,314 @@ metadata:
       - IONODE_NATS_URL
 ---
 
-# IOnode - NATS-Addressable Hardware Nodes for OpenClaw
+# IOnode — NATS-Addressable Hardware Nodes for OpenClaw
 
-IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable
-hardware node. Every GPIO pin, ADC channel, sensor, and actuator becomes
-reachable via simple request/reply.
+IOnode turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin,
+ADC channel, sensor, and actuator becomes reachable via request/reply over NATS.
 
-You issue NATS requests. IOnode executes them directly on hardware and replies
-instantly. Registered sensors and actuators are auto-routed under the `.hal.`
-namespace.
+- **Website & docs:** https://ionode.io
+- **GitHub:** https://github.com/M64GitHub/IOnode
+- **Firmware version:** 0.2.0
 
-## How to Talk to IOnode
+## Prerequisites
 
-All communication uses `nats req` (request/reply). Subjects follow a flat,
-human-readable pattern:
+### Required
+- **`nats` CLI** — https://github.com/nats-io/natscli (must be in PATH)
+- **NATS server** accessible from both OpenClaw and IOnode devices (default port 4222)
+- One or more IOnode devices on the same network
 
-```bash
-nats req <device>.hal.<subject> "<payload>"
+### Recommended: `ionode` CLI
 
-# Examples:
-nats req ionode-01.hal.system.temperature ""   # -> "33.2"
-nats req ionode-01.hal.gpio.4.get ""           # -> "0"
-nats req ionode-01.hal.gpio.4.set "1"          # -> "ok"
-nats req ionode-01.hal.temperature ""          # -> "24.5"  (registered sensor)
-nats req ionode-01.hal.fan.set "1"             # -> "ok"    (registered actuator)
-```
-
-### Wrapper Script
-
-A convenience wrapper is available at `scripts/ion.sh`:
+The `ionode` CLI provides 28 fleet management commands with formatted, colored
+output. **Always check if it's installed before using raw NATS commands:**
 
 ```bash
-scripts/ion.sh discover                        # find all IOnode devices
-scripts/ion.sh caps <device>                   # query device capabilities
-scripts/ion.sh read <device> <sensor>          # read a registered sensor
-scripts/ion.sh set <device> <actuator> <value> # set a registered actuator
-scripts/ion.sh gpio <device> <pin> get|set [value]
-scripts/ion.sh adc <device> <pin>
-scripts/ion.sh pwm <device> <pin> get|set [value]
-scripts/ion.sh sub <device>                    # subscribe to device events
+command -v ionode >/dev/null 2>&1 && echo "ionode CLI available" || echo "ionode CLI not found"
 ```
 
-## Discovery
+**If `ionode` is NOT installed**, tell the user:
+
+> The `ionode` CLI is not installed. It provides fleet management, colored output,
+> and easier commands. To install it:
+>
+> ```bash
+> # From the IOnode repo
+> git clone https://github.com/M64GitHub/IOnode
+> sudo ln -sf "$(pwd)/IOnode/cli/ionode" /usr/local/bin/ionode
+> ```
+>
+> I can use raw `nats req` commands in the meantime — everything still works.
+
+**If `ionode` IS installed**, prefer it over raw `nats req` for all operations.
+
+### Environment
+
+Set `IONODE_NATS_URL` if NATS is not at `localhost:4222`:
 
 ```bash
-# Find all IOnode (and WireClaw HAL-capable) devices on the network
-scripts/ion.sh discover
-# or: nats req "_ion.discover" "" --replies=0 --timeout=3s
-
-# Query a specific device
-scripts/ion.sh caps ionode-01
-# or: nats req ionode-01.capabilities ""
+export IONODE_NATS_URL="nats://192.168.1.100:4222"
 ```
 
-Returns: device name, firmware version, chip, IP, free heap, HAL capabilities,
-and all registered sensors/actuators with current values.
+The `ionode` CLI and raw `nats` commands both respect this variable.
+
+---
+
+## Quick Reference: ionode CLI
+
+```bash
+# Discovery & monitoring
+ionode discover                           # find all nodes on the network
+ionode ls                                 # compact fleet table
+ionode info <device>                      # deep dive — health, HAL, devices
+ionode status <device>                    # quick health check
+ionode watch                              # live heartbeat + event stream
+ionode watch --tag <tag>                  # monitor a tagged group
+
+# Read sensors
+ionode read <device> <sensor>             # read a registered sensor
+ionode read <device> chip_temp            # chip temperature (always available)
+
+# Control actuators
+ionode write <device> <actuator> <value>  # set an actuator
+ionode set <device> <actuator> <value>    # alias for write
+
+# Raw hardware access
+ionode gpio <device> <pin> get            # read GPIO pin
+ionode gpio <device> <pin> set <0|1>      # write GPIO pin
+ionode adc <device> <pin>                 # read ADC (0-4095, with bar graph)
+ionode pwm <device> <pin> set <0-255>     # set PWM output
+ionode pwm <device> <pin> get             # read last PWM value
+
+# Fleet configuration
+ionode tag <device> <tag>                 # set fleet tag
+ionode device add <dev> <name> <kind> <pin> [--unit X] [--inverted]
+ionode device remove <device> <name>      # remove a device
+ionode event set <dev> <sensor> --above|--below <threshold> [--cooldown <sec>]
+ionode event clear <device> <sensor>      # remove threshold event
+ionode event list <device>                # list configured events
+```
+
+Full CLI reference: https://github.com/M64GitHub/IOnode/blob/main/docs/CLI.md
+
+---
+
+## Quick Reference: Raw NATS (fallback)
+
+Use these when the `ionode` CLI is not installed. All subjects use request/reply.
+
+```bash
+NATS_URL="${IONODE_NATS_URL:-nats://localhost:4222}"
+
+# Discovery
+nats req _ion.discover "" --replies=0 --timeout=3s --server "$NATS_URL"
+nats req <device>.capabilities "" --server "$NATS_URL"
+
+# Sensors
+nats req <device>.hal.<sensor> "" --server "$NATS_URL"
+nats req <device>.hal.system.temperature "" --server "$NATS_URL"
+
+# Actuators
+nats req <device>.hal.<actuator>.set "<value>" --server "$NATS_URL"
+
+# GPIO / ADC / PWM
+nats req <device>.hal.gpio.<pin>.get "" --server "$NATS_URL"
+nats req <device>.hal.gpio.<pin>.set "1" --server "$NATS_URL"
+nats req <device>.hal.adc.<pin>.read "" --server "$NATS_URL"
+nats req <device>.hal.pwm.<pin>.set "128" --server "$NATS_URL"
+
+# System
+nats req <device>.hal.system.heap "" --server "$NATS_URL"
+nats req <device>.hal.system.uptime "" --server "$NATS_URL"
+nats req <device>.hal.device.list "" --server "$NATS_URL"
+```
+
+---
 
 ## Core HAL Subjects
 
-These are always available on every IOnode - no registration required.
+These are always available on every IOnode — no registration required.
 
 ### GPIO
 ```bash
-nats req <device>.hal.gpio.<pin>.get ""     # -> "0" or "1"
-nats req <device>.hal.gpio.<pin>.set "1"    # -> "ok"
-nats req <device>.hal.gpio.<pin>.set "0"    # -> "ok"
+ionode gpio <device> <pin> get             # → 0 or 1
+ionode gpio <device> <pin> set <0|1>       # → ok
 ```
 
 ### ADC (Analog Read)
 ```bash
-nats req <device>.hal.adc.<pin>.read ""     # -> "2048"  (raw 0-4095)
+ionode adc <device> <pin>                  # → 0-4095 (12-bit, with bar graph)
 ```
 
 ### PWM Output
 ```bash
-nats req <device>.hal.pwm.<pin>.set "128"   # -> "ok"  (0-255)
-nats req <device>.hal.pwm.<pin>.get ""      # -> "128" (last written value)
+ionode pwm <device> <pin> set <0-255>      # → ok
+ionode pwm <device> <pin> get              # → last written value
 ```
 
 ### UART / Serial Bridge
 ```bash
-nats req <device>.hal.uart.read ""          # -> last received line
-nats req <device>.hal.uart.write "GET_DATA" # -> "ok"
+nats req <device>.hal.uart.read ""         # → last received line
+nats req <device>.hal.uart.write "GET_DATA" # → ok
 ```
 Requires a `serial_text` device registered on the node.
 
 ### System Info
 ```bash
-nats req <device>.hal.system.temperature "" # -> "33.2"  (chip temp °C)
-nats req <device>.hal.system.heap ""        # -> "156000" (free bytes)
-nats req <device>.hal.system.uptime ""      # -> "3672"   (seconds)
+ionode status <device>    # shows all of the below in one formatted view
+
+# Or individually:
+nats req <device>.hal.system.temperature ""     # chip temp °C
+nats req <device>.hal.system.heap ""            # free heap bytes
+nats req <device>.hal.system.uptime ""          # seconds since boot
+nats req <device>.hal.system.rssi ""            # WiFi signal dBm
+nats req <device>.hal.system.reset_reason ""    # last reset reason
+nats req <device>.hal.system.nats_reconnects "" # reconnect count
 ```
 
 ### Device List
 ```bash
-nats req <device>.hal.device.list ""        # -> JSON array of all registered devices
+ionode info <device>                        # formatted device list + system info
+nats req <device>.hal.device.list ""        # raw JSON array
 ```
+
+---
 
 ## Registered Sensors & Actuators
 
-Any device registered in the node's `devices.json` is automatically routed
+Devices registered on the node (via web UI, CLI, or NATS) are auto-routed
 under `{device}.hal.{name}`:
 
 ```bash
-# Read a sensor (returns bare float string)
-nats req ionode-01.hal.temperature ""       # -> "24.5"
-nats req ionode-01.hal.light ""             # -> "67.2"
-
-# Read with full metadata
-nats req ionode-01.hal.temperature.info ""  # -> {"name":"temperature","kind":"ntc_10k","value":24.5,"unit":"C","pin":4}
-
-# Set an actuator
-nats req ionode-01.hal.fan.set "1"          # -> "ok"
-nats req ionode-01.hal.led_strip.set "128"  # -> "ok"  (PWM, 0-255)
-
-# Read actuator state
-nats req ionode-01.hal.fan.get ""           # -> "1"
+ionode read ionode-01 room_temp             # → 24.5
+ionode write ionode-01 fan 1                # → ok
+ionode read ionode-01 light                 # → 67.2
 ```
 
 ### Supported Device Kinds
 
-| Kind | Type | Notes |
-|------|------|-------|
-| `digital_in` | sensor | digitalRead → 0/1 |
-| `analog_in` | sensor | analogRead → 0-4095 |
-| `ntc_10k` | sensor | NTC thermistor → °C, EMA-smoothed |
-| `ldr` | sensor | Light sensor → 0-100% |
-| `internal_temp` | sensor | Chip temperature, always pre-registered |
-| `serial_text` | sensor | Last UART line received |
-| `digital_out` | actuator | digitalWrite |
-| `relay` | actuator | digitalWrite with optional inversion |
-| `pwm` | actuator | analogWrite 0-255 |
-| `rgb_led` | actuator | Built-in RGB LED, value is packed 0xRRGGBB |
+**Sensors:**
 
-### Pre-registered Devices (always available, no registration needed)
-- `chip_temp` - Internal chip temperature in °C
-- `clock_hour` - Current hour (0–23)
-- `clock_minute` - Current minute (0–59)
-- `clock_hhmm` - Time as HHMM (e.g. 1830)
-- `rgb_led` - Built-in RGB LED (boards with RGB LED only). Set with packed `(r<<16 | g<<8 | b)`, e.g. `16711680` = red
+| Kind | Notes |
+|------|-------|
+| `digital_in` | digitalRead → 0/1 |
+| `analog_in` | analogRead → 0–4095 |
+| `ntc_10k` | NTC thermistor → °C, EMA-smoothed |
+| `ldr` | Light sensor → 0–100% |
+| `internal_temp` | Chip temperature, always pre-registered |
+| `clock_hour` | Current hour (0–23) from NTP |
+| `clock_minute` | Current minute (0–59) from NTP |
+| `clock_hhmm` | HHMM format (e.g. 1430) |
+| `nats_value` | Subscribes to a NATS subject, stores last value |
+| `serial_text` | Reads lines from UART1, parses numeric value |
 
-## Reserved HAL Keywords
+**Actuators:**
 
-Users cannot name their devices any of these words (validated at registration):
-`gpio`, `adc`, `pwm`, `dac`, `uart`, `system`, `device`, `config`
+| Kind | Notes |
+|------|-------|
+| `digital_out` | digitalWrite |
+| `relay` | digitalWrite with optional inversion |
+| `pwm` | analogWrite 0–255 |
+| `rgb_led` | Built-in RGB LED, packed 0xRRGGBB value |
 
-## Working with Fleets
+### Pre-registered Devices (always available)
+- `chip_temp` — internal chip temperature in °C
+- `clock_hour` — current hour (0–23)
+- `clock_minute` — current minute (0–59)
+- `clock_hhmm` — time as HHMM (e.g. 1830)
+- `rgb_led` — built-in RGB LED (boards with RGB LED only)
 
-IOnode nodes are designed to be deployed in quantity. Use discovery to find
-all nodes, then address each by its device name.
+### Registering New Devices
 
 ```bash
-# Discover all nodes
-scripts/ion.sh discover
+# Via CLI (preferred)
+ionode device add ionode-01 room_temp ntc_10k 2 --unit C
+ionode device add ionode-01 fan relay 8 --inverted
 
-# Read temperature from multiple nodes
-for node in ionode-01 ionode-02 ionode-03; do
-  echo -n "$node: "
-  scripts/ion.sh read $node temperature
-done
-
-# Turn on all relays named "fan"
-for node in ionode-01 ionode-02 ionode-03; do
-  scripts/ion.sh set $node fan 1
-done
+# Via NATS
+nats req ionode-01.config.device.add '{"n":"room_temp","k":"ntc_10k","p":2,"u":"C"}'
 ```
+
+---
+
+## Fleet Management
+
+### Tags & Group Discovery
+
+```bash
+ionode tag ionode-01 greenhouse
+ionode discover --tag greenhouse            # all greenhouse nodes
+
+# Raw NATS
+nats req ionode-01.config.tag.set 'greenhouse'
+nats req _ion.group.greenhouse ''           # all tagged nodes respond
+```
+
+Tags update live — no reboot needed.
+
+### Health Heartbeats
+
+Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s):
+
+```bash
+ionode watch                                # live heartbeat + event stream
+ionode watch --tag greenhouse               # filter by tag
+```
+
+Heartbeat JSON includes: device, tag, version, uptime, heap, rssi,
+nats_reconnects, sensors, actuators, events_fired.
+
+### Threshold Events
+
+Sensors fire NATS notifications when values cross a threshold:
+
+```bash
+ionode event set ionode-01 chip_temp --above 45 --cooldown 30
+ionode event list ionode-01
+ionode watch                                # events appear in the stream
+
+# Raw NATS
+nats req ionode-01.config.event.set '{"n":"chip_temp","t":45,"d":"above","cd":30}'
+nats sub 'ionode-01.events.>'
+```
+
+Edge-detected with configurable cooldown. Events persist across reboots.
+
+### Remote Configuration
+
+All configuration is available over NATS — add/remove devices, set tags,
+configure events, rename nodes. No reflash needed.
+
+Full protocol reference: https://github.com/M64GitHub/IOnode/blob/main/docs/NATS-API.md
+
+### Fleet Dashboard (Web)
+
+A single-file HTML dashboard connects to NATS via WebSocket for live fleet
+monitoring. Located at `web/dashboard/index.html` in the IOnode repo.
+
+Requires NATS WebSocket enabled:
+```
+websocket {
+  port: 8080
+  no_tls: true
+}
+```
+
+---
 
 ## Automation Patterns
 
-IOnode has no on-device rule engine. Automation logic runs in OpenClaw -
-as shell scripts, background jobs, or loops. This is intentional: the logic
-lives where it can be updated, monitored, and extended without reflashing.
+IOnode has no on-device rule engine. Automation logic runs here in OpenClaw —
+as shell scripts, background jobs, or monitoring loops. This is intentional:
+the logic lives where it can be updated and extended without reflashing.
 
 ### Polling loop
 ```bash
-# Check temperature every 30 seconds, act if above threshold
 while true; do
-  TEMP=$(scripts/ion.sh read ionode-01 temperature)
+  TEMP=$(ionode read ionode-01 room_temp)
   if (( $(echo "$TEMP > 28" | bc -l) )); then
-    scripts/ion.sh set ionode-01 fan 1
+    ionode write ionode-01 fan 1
   else
-    scripts/ion.sh set ionode-01 fan 0
+    ionode write ionode-01 fan 0
   fi
   sleep 30
 done
@@ -205,112 +332,74 @@ done
 
 ### Cross-node automation
 ```bash
-# Read from one node, act on another
-LIGHT=$(scripts/ion.sh read ionode-01 light)
+LIGHT=$(ionode read ionode-01 light)
 if (( $(echo "$LIGHT < 20" | bc -l) )); then
-  scripts/ion.sh gpio ionode-02 8 set 1
+  ionode gpio ionode-02 8 set 1
 fi
 ```
 
-### Cross-domain: digital trigger → physical action
+### Cross-domain: CI status → physical LED
 ```bash
-# React to a GitHub CI failure → turn on a warning LED
 nats sub "ci.build.status" | while read -r line; do
   if echo "$line" | grep -q '"status":"failed"'; then
-    scripts/ion.sh gpio ionode-01 4 set 1
+    ionode gpio ionode-01 4 set 1    # red warning LED
   else
-    scripts/ion.sh gpio ionode-01 4 set 0
+    ionode gpio ionode-01 4 set 0
   fi
 done
 ```
 
-### Subscribe to events
+### Fleet-wide operations
 ```bash
-# Monitor all events from a node
-scripts/ion.sh sub ionode-01
-# or: nats sub "ionode-01.events"
+# Read temperature from every node
+ionode discover --json | jq -r '.[].device' | while read node; do
+  echo -n "$node: "
+  ionode read "$node" chip_temp
+done
+
+# Tag all nodes in a batch
+for i in $(seq -w 1 10); do
+  ionode tag "ionode-$i" greenhouse
+done
 ```
+
+### RGB LED control
+```bash
+# Red (0xFF0000 = 16711680)
+ionode write ionode-01 rgb_led 16711680
+# Green (0x00FF00 = 65280)
+ionode write ionode-01 rgb_led 65280
+# Off
+ionode write ionode-01 rgb_led 0
+```
+
+---
 
 ## WireClaw Interoperability
 
-IOnode and WireClaw share the same `.hal.` protocol. OpenClaw can read sensors
-from a WireClaw node using the same `ion.sh` script:
+IOnode and [WireClaw](https://wireclaw.io) share the same `.hal.` protocol.
+OpenClaw talks to both identically for hardware access:
 
 ```bash
-scripts/ion.sh read wireclaw-01 chip_temp    # works on WireClaw too
-scripts/ion.sh gpio wireclaw-01 4 get        # same HAL, same commands
+ionode read wireclaw-01 chip_temp            # works on WireClaw too
+ionode gpio wireclaw-01 4 get                # same HAL, same commands
 ```
 
-For WireClaw-specific features (AI tools, rules engine, Telegram), use the
-WireClaw skill instead.
+For WireClaw-specific features (on-device AI rules, Telegram, tool-calling
+loop), use the WireClaw skill instead.
 
-## Examples
+---
 
-**Read all sensors on a node:**
-```bash
-scripts/ion.sh caps ionode-01
-# or: nats req ionode-01.hal.device.list ""
-```
+## Reserved HAL Keywords
 
-**Temperature-controlled fan:**
-```bash
-TEMP=$(scripts/ion.sh read ionode-01 room_temp)
-[ $(echo "$TEMP > 25" | bc -l) -eq 1 ] && scripts/ion.sh set ionode-01 fan 1
-```
-
-**Blink a GPIO:**
-```bash
-for i in $(seq 5); do
-  scripts/ion.sh gpio ionode-01 5 set 1; sleep 0.5
-  scripts/ion.sh gpio ionode-01 5 set 0; sleep 0.5
-done
-```
-
-**Dim an LED strip via PWM:**
-```bash
-for val in 0 32 64 128 192 255; do
-  scripts/ion.sh pwm ionode-01 3 $val; sleep 0.2
-done
-```
-
-**Read a UART-attached sensor:**
-```bash
-nats req ionode-01.hal.uart.write "READ" --server $IONODE_NATS_URL
-sleep 0.1
-nats req ionode-01.hal.uart.read "" --server $IONODE_NATS_URL
-```
-
-**Set the built-in RGB LED:**
-```bash
-# Red (0xFF0000 = 16711680)
-scripts/ion.sh set ionode-01 rgb_led 16711680
-# Green (0x00FF00 = 65280)
-scripts/ion.sh set ionode-01 rgb_led 65280
-# Off
-scripts/ion.sh set ionode-01 rgb_led 0
-```
-
-**Read back a PWM value:**
-```bash
-scripts/ion.sh pwm ionode-01 3 set 128
-scripts/ion.sh pwm ionode-01 3 get           # -> "128"
-```
-
-**Monitor chip temperature across a fleet:**
-```bash
-nats req "_ion.discover" "" --replies=0 --timeout=3s | \
-  jq -r '.device' | while read node; do
-    echo -n "$node chip_temp: "
-    scripts/ion.sh read $node chip_temp
-  done
-```
+Users cannot name their devices any of these words:
+`gpio`, `adc`, `pwm`, `dac`, `uart`, `system`, `device`, `config`
 
 ## Notes
 
+- Always discover nodes first (`ionode discover`) if you don't know what's on the network.
+- All NATS responses are plain strings (bare floats, "ok", "0"/"1") or JSON.
+- IOnode has no rule engine — all automation logic runs here in OpenClaw.
+- The on-device web UI at `http://{device-ip}/` is useful for manual control
+  and adding/removing devices without reflashing.
 - NATS server must be accessible from both OpenClaw and the IOnode devices.
-  Default port 4222. Set `IONODE_NATS_URL` env var if non-default.
-- All responses are plain strings (bare floats, "ok", "0"/"1") or error JSON.
-- IOnode has no rule engine. All automation logic runs here in OpenClaw.
-- Always discover capabilities first if you don't know what sensors are registered.
-- The web UI at `http://{device}.local/` is useful for manual control and
-  adding/removing devices without reflashing.
