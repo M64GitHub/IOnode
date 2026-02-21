@@ -35,8 +35,8 @@ _show_help() {
     printf '    ionode %s<command>%s [options]\n\n' "$(c_accent)" "$(_rst)"
 
     printf '  %s%sFLEET%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
-    printf '    %sdiscover%s        Find all nodes on the network\n' "$(c_accent)" "$(_rst)"
-    printf '    %sls%s              Compact fleet table\n' "$(c_accent)" "$(_rst)"
+    printf '    %sdiscover%s           Find all nodes on the network\n' "$(c_accent)" "$(_rst)"
+    printf '    %sls%s                 Compact fleet table\n' "$(c_accent)" "$(_rst)"
     printf '    %sinfo%s   %s<node>%s  Detailed node info\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %sgroup%s  %s<tag>%s   List nodes by tag\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %sstatus%s %s[node]%s  Fleet or node health\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
@@ -57,9 +57,9 @@ _show_help() {
     printf '    %stag%s       %s<node> [tag]%s                   Get/set tag\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %sheartbeat%s %s<node> <seconds>%s               Set heartbeat interval\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %srename%s    %s<node> <new>%s                   Rename (reboots)\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
-    printf '    %sdevice%s    %sadd <node> <n> <kind> <pin>%s    Register device\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
-    printf '    %sdevice%s    %sremove <node> <name>%s           Remove device\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
-    printf '    %sdevice%s    %slist <node>%s                    List devices\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sdevice%s    %sadd <node> <n> <kind> <pin>%s    Register device (sensor/actuator)\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sdevice%s    %sremove <node> <name>%s           Remove device   (sensor/actuator)\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sdevice%s    %slist <node>%s                    List devices  (sensors/actuators)\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '\n'
 
     printf '  %s%sEVENTS%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
@@ -86,7 +86,7 @@ _show_help() {
 
     printf '  %s%sENVIRONMENT%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
     printf '    %sIONODE_NATS_URL%s    NATS server URL (overrides config file)\n' "$(c_text)" "$(_rst)"
-    printf '    %sNO_COLOR%s           Disable colors (https://no-color.org)\n' "$(c_text)" "$(_rst)"
+    printf '    %sNO_COLOR%s           Disable colors  (https://no-color.org/)\n' "$(c_text)" "$(_rst)"
     printf '\n'
 
     printf '  %sPriority: --server flag > IONODE_NATS_URL > config file > localhost%s\n' \
