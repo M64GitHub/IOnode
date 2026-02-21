@@ -94,7 +94,7 @@ That's it. Your ESP32 speaks NATS.
 
 ## CLI Tool
 
-`ionode` is a fleet management CLI with colored, formatted output. Requires [`nats` CLI](https://github.com/nats-io/natscli) and [`jq`](https://jqlang.github.io/jq/).
+`ionode` is a fleet management CLI with colored, formatted output. Requires [`nats` cli](https://github.com/nats-io/natscli) and [`jq`](https://jqlang.github.io/jq/).
 
 ```bash
 sudo ln -sf "$(pwd)/cli/ionode" /usr/local/bin/ionode
