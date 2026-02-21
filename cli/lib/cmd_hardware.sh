@@ -17,8 +17,7 @@ cmd_read() {
 
     if [[ "$info_flag" == true ]]; then
         local result
-        result=$(nats_req "${device}.hal.${sensor}.info" "" "3s")
-        if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+        if ! result=$(nats_req "${device}.hal.${sensor}.info" "" "3s") || [[ -z "$result" ]]; then
             timeout_msg "$device"
             return 1
         fi
@@ -53,8 +52,7 @@ cmd_read() {
     fi
 
     local result
-    result=$(nats_req "${device}.hal.${sensor}" "" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.hal.${sensor}" "" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -86,8 +84,7 @@ cmd_write() {
     local value="$3"
 
     local result
-    result=$(nats_req "${device}.hal.${actuator}.set" "$value" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.hal.${actuator}.set" "$value" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -115,8 +112,7 @@ cmd_gpio() {
     case "$action" in
         get)
             local result
-            result=$(nats_req "${device}.hal.gpio.${pin}.get" "" "3s")
-            if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+            if ! result=$(nats_req "${device}.hal.gpio.${pin}.get" "" "3s") || [[ -z "$result" ]]; then
                 timeout_msg "$device"
                 return 1
             fi
@@ -141,8 +137,7 @@ cmd_gpio() {
             fi
             local value="$4"
             local result
-            result=$(nats_req "${device}.hal.gpio.${pin}.set" "$value" "3s")
-            if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+            if ! result=$(nats_req "${device}.hal.gpio.${pin}.set" "$value" "3s") || [[ -z "$result" ]]; then
                 timeout_msg "$device"
                 return 1
             fi
@@ -176,8 +171,7 @@ cmd_adc() {
     local pin="$2"
 
     local result
-    result=$(nats_req "${device}.hal.adc.${pin}.read" "" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.hal.adc.${pin}.read" "" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -213,8 +207,7 @@ cmd_pwm() {
     case "$action" in
         get)
             local result
-            result=$(nats_req "${device}.hal.pwm.${pin}.get" "" "3s")
-            if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+            if ! result=$(nats_req "${device}.hal.pwm.${pin}.get" "" "3s") || [[ -z "$result" ]]; then
                 timeout_msg "$device"
                 return 1
             fi
@@ -236,8 +229,7 @@ cmd_pwm() {
             fi
             local value="$4"
             local result
-            result=$(nats_req "${device}.hal.pwm.${pin}.set" "$value" "3s")
-            if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+            if ! result=$(nats_req "${device}.hal.pwm.${pin}.set" "$value" "3s") || [[ -z "$result" ]]; then
                 timeout_msg "$device"
                 return 1
             fi
@@ -272,8 +264,7 @@ cmd_uart() {
     case "$action" in
         read)
             local result
-            result=$(nats_req "${device}.hal.uart.read" "" "3s")
-            if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+            if ! result=$(nats_req "${device}.hal.uart.read" "" "3s") || [[ -z "$result" ]]; then
                 timeout_msg "$device"
                 return 1
             fi
@@ -289,8 +280,7 @@ cmd_uart() {
             fi
             local text="$3"
             local result
-            result=$(nats_req "${device}.hal.uart.write" "$text" "3s")
-            if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+            if ! result=$(nats_req "${device}.hal.uart.write" "$text" "3s") || [[ -z "$result" ]]; then
                 timeout_msg "$device"
                 return 1
             fi
@@ -324,8 +314,7 @@ cmd_devices() {
     fi
 
     local result
-    result=$(nats_req "${device}.hal.device.list" "" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.hal.device.list" "" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi

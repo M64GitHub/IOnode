@@ -35,8 +35,8 @@ _show_help() {
     printf '    ionode %s<command>%s [options]\n\n' "$(c_accent)" "$(_rst)"
 
     printf '  %s%sFLEET%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
-    printf '    %sdiscover%s           Find all nodes on the network\n' "$(c_accent)" "$(_rst)"
-    printf '    %sls%s                 Compact fleet table\n' "$(c_accent)" "$(_rst)"
+    printf '    %sdiscover%s       Find all nodes on the network\n' "$(c_accent)" "$(_rst)"
+    printf '    %sls%s             Compact fleet table\n' "$(c_accent)" "$(_rst)"
     printf '    %sinfo%s   %s<node>%s  Detailed node info\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %sgroup%s  %s<tag>%s   List nodes by tag\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %sstatus%s %s[node]%s  Fleet or node health\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
@@ -109,6 +109,10 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --server|-s)
+            if [[ $# -lt 2 ]]; then
+                err "--server requires a URL"
+                exit 1
+            fi
             set_nats_url "$2"
             shift 2
             ;;

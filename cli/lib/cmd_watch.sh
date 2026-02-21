@@ -9,8 +9,11 @@ cmd_watch() {
         case "$1" in
             --heartbeats) mode="heartbeats"; shift ;;
             --events)     mode="events"; shift ;;
-            --tag)        tag_filter="$2"; shift 2 ;;
-            *) shift ;;
+            --tag)
+                if [[ $# -lt 2 ]]; then err "--tag requires a value"; return 1; fi
+                tag_filter="$2"; shift 2 ;;
+            -*) err "unknown option: $1"; return 1 ;;
+            *)  err "unexpected argument: $1"; return 1 ;;
         esac
     done
 
@@ -46,8 +49,9 @@ cmd_watch() {
     local fifo_hb="${tmpdir}/heartbeats"
     local fifo_ev="${tmpdir}/events"
 
-    # Cleanup on exit
-    trap '_watch_cleanup' EXIT INT TERM
+    # Cleanup on exit — separate signal traps from EXIT trap
+    trap '_watch_cleanup' EXIT
+    trap '_watch_on_signal' INT TERM
 
     _WATCH_PIDS=()
     _WATCH_TMPDIR="$tmpdir"
@@ -82,15 +86,29 @@ cmd_watch() {
 
 _WATCH_PIDS=()
 _WATCH_TMPDIR=""
+_WATCH_CLEANED=false
 
 _watch_cleanup() {
+    # Guard against double-cleanup (INT fires, then EXIT fires)
+    if [[ "$_WATCH_CLEANED" == true ]]; then
+        return
+    fi
+    _WATCH_CLEANED=true
+
     for pid in "${_WATCH_PIDS[@]}"; do
-        kill "$pid" 2>/dev/null
-        wait "$pid" 2>/dev/null
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
     done
     if [[ -n "$_WATCH_TMPDIR" ]] && [[ -d "$_WATCH_TMPDIR" ]]; then
         rm -rf "$_WATCH_TMPDIR"
     fi
+}
+
+_watch_on_signal() {
+    _watch_cleanup
+    # Re-raise so parent shell sees correct exit status (130 for SIGINT)
+    trap - INT TERM
+    kill -INT $$ 2>/dev/null || true
 }
 
 _watch_heartbeats() {

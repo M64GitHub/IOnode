@@ -8,9 +8,8 @@ cmd_discover() {
     fi
 
     spinner_start "Discovering IOnode devices..."
-    local raw
-    raw=$(nats_req_multi "_ion.discover" "" "3s")
-    local rc=$?
+    local raw rc=0
+    raw=$(nats_req_multi "_ion.discover" "" "3s") || rc=$?
     spinner_stop
 
     if [[ $rc -ne 0 ]] || [[ -z "$raw" ]]; then
@@ -52,8 +51,11 @@ cmd_ls() {
     local tag_filter=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --tag) tag_filter="$2"; shift 2 ;;
-            *) shift ;;
+            --tag)
+                if [[ $# -lt 2 ]]; then err "--tag requires a value"; return 1; fi
+                tag_filter="$2"; shift 2 ;;
+            -*) err "unknown option: $1"; return 1 ;;
+            *)  err "unexpected argument: $1"; return 1 ;;
         esac
     done
 
@@ -63,9 +65,8 @@ cmd_ls() {
     fi
 
     spinner_start "Scanning fleet..."
-    local raw
-    raw=$(nats_req_multi "$subject" "" "3s")
-    local rc=$?
+    local raw rc=0
+    raw=$(nats_req_multi "$subject" "" "3s") || rc=$?
     spinner_stop
 
     if [[ $rc -ne 0 ]] || [[ -z "$raw" ]]; then
@@ -151,9 +152,8 @@ cmd_info() {
     fi
 
     spinner_start "Querying ${device}..."
-    local caps
-    caps=$(nats_req "${device}.capabilities" "" "3s")
-    local rc=$?
+    local caps rc=0
+    caps=$(nats_req "${device}.capabilities" "" "3s") || rc=$?
     spinner_stop
 
     if [[ $rc -ne 0 ]] || [[ -z "$caps" ]]; then

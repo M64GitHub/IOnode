@@ -15,8 +15,7 @@ cmd_config() {
     fi
 
     local result
-    result=$(nats_req "${device}.config.get" "" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.get" "" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -60,8 +59,7 @@ cmd_tag() {
     if [[ -z "$new_tag" ]]; then
         # Get current tag
         local result
-        result=$(nats_req "${device}.config.tag.get" "" "3s")
-        if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+        if ! result=$(nats_req "${device}.config.tag.get" "" "3s") || [[ -z "$result" ]]; then
             timeout_msg "$device"
             return 1
         fi
@@ -87,8 +85,7 @@ cmd_tag() {
     else
         # Set tag
         local result
-        result=$(nats_req "${device}.config.tag.set" "$new_tag" "3s")
-        if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+        if ! result=$(nats_req "${device}.config.tag.set" "$new_tag" "3s") || [[ -z "$result" ]]; then
             timeout_msg "$device"
             return 1
         fi
@@ -127,8 +124,7 @@ cmd_heartbeat() {
     fi
 
     local result
-    result=$(nats_req "${device}.config.heartbeat.set" "$seconds" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.heartbeat.set" "$seconds" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -167,8 +163,7 @@ cmd_rename() {
     printf '  %s⚠  Rename will reboot the device.%s\n' "$(c_warn)" "$(_rst)"
 
     local result
-    result=$(nats_req "${device}.config.name.set" "$new_name" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.name.set" "$new_name" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -206,11 +201,18 @@ cmd_device_add() {
     local unit="" inverted=false baud="" nats_subj=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --unit)     unit="$2"; shift 2 ;;
+            --unit)
+                if [[ $# -lt 2 ]]; then err "--unit requires a value"; return 1; fi
+                unit="$2"; shift 2 ;;
             --inverted) inverted=true; shift ;;
-            --baud)     baud="$2"; shift 2 ;;
-            --nats)     nats_subj="$2"; shift 2 ;;
-            *) shift ;;
+            --baud)
+                if [[ $# -lt 2 ]]; then err "--baud requires a value"; return 1; fi
+                baud="$2"; shift 2 ;;
+            --nats)
+                if [[ $# -lt 2 ]]; then err "--nats requires a value"; return 1; fi
+                nats_subj="$2"; shift 2 ;;
+            -*) err "unknown option: $1"; return 1 ;;
+            *)  err "unexpected argument: $1"; return 1 ;;
         esac
     done
 
@@ -228,8 +230,7 @@ cmd_device_add() {
     payload+="}"
 
     local result
-    result=$(nats_req "${device}.config.device.add" "$payload" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.device.add" "$payload" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -271,8 +272,7 @@ cmd_device_remove() {
     payload=$(printf '{"n":"%s"}' "$dev_name")
 
     local result
-    result=$(nats_req "${device}.config.device.remove" "$payload" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.device.remove" "$payload" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi

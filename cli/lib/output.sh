@@ -146,13 +146,12 @@ spinner_start() {
         done
     ) &
     _spinner_pid=$!
-    disown "$_spinner_pid" 2>/dev/null
 }
 
 spinner_stop() {
     if [[ -n "$_spinner_pid" ]]; then
-        kill "$_spinner_pid" 2>/dev/null
-        wait "$_spinner_pid" 2>/dev/null
+        kill "$_spinner_pid" 2>/dev/null || true
+        wait "$_spinner_pid" 2>/dev/null || true
         _spinner_pid=""
         printf '\r\e[K'  # clear the spinner line
     fi

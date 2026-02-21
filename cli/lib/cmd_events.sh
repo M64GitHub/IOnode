@@ -35,10 +35,17 @@ cmd_event_set() {
     local threshold="" direction="" cooldown="10"
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --above)   direction="above"; threshold="$2"; shift 2 ;;
-            --below)   direction="below"; threshold="$2"; shift 2 ;;
-            --cooldown) cooldown="$2"; shift 2 ;;
-            *) shift ;;
+            --above)
+                if [[ $# -lt 2 ]]; then err "--above requires a value"; return 1; fi
+                direction="above"; threshold="$2"; shift 2 ;;
+            --below)
+                if [[ $# -lt 2 ]]; then err "--below requires a value"; return 1; fi
+                direction="below"; threshold="$2"; shift 2 ;;
+            --cooldown)
+                if [[ $# -lt 2 ]]; then err "--cooldown requires a value"; return 1; fi
+                cooldown="$2"; shift 2 ;;
+            -*) err "unknown option: $1"; return 1 ;;
+            *)  err "unexpected argument: $1"; return 1 ;;
         esac
     done
 
@@ -53,8 +60,7 @@ cmd_event_set() {
         "$sensor" "$threshold" "$direction" "$cooldown")
 
     local result
-    result=$(nats_req "${device}.config.event.set" "$payload" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.event.set" "$payload" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -95,8 +101,7 @@ cmd_event_clear() {
     payload=$(printf '{"n":"%s"}' "$sensor")
 
     local result
-    result=$(nats_req "${device}.config.event.clear" "$payload" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.event.clear" "$payload" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
@@ -132,8 +137,7 @@ cmd_event_list() {
     fi
 
     local result
-    result=$(nats_req "${device}.config.event.list" "" "3s")
-    if [[ $? -ne 0 ]] || [[ -z "$result" ]]; then
+    if ! result=$(nats_req "${device}.config.event.list" "" "3s") || [[ -z "$result" ]]; then
         timeout_msg "$device"
         return 1
     fi
