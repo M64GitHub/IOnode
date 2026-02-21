@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+# ┌─────────────────────────────────────────────┐
+# │  [IOnode] CLI — Fleet Management Tool       │
+# │  https://ionode.io                          │
+# │  Part of the WireClaw ecosystem             │
+# └─────────────────────────────────────────────┘
+#
+# Usage: ionode <command> [options]
+#
+# Requires: nats CLI (https://github.com/nats-io/natscli)
+#           jq (for structured output)
+
+set -euo pipefail
+
+IONODE_VERSION="0.2.0"
+IONODE_CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --- Load libraries ---
+source "${IONODE_CLI_DIR}/lib/output.sh"
+source "${IONODE_CLI_DIR}/lib/nats.sh"
+source "${IONODE_CLI_DIR}/lib/cmd_discover.sh"
+source "${IONODE_CLI_DIR}/lib/cmd_hardware.sh"
+source "${IONODE_CLI_DIR}/lib/cmd_config.sh"
+source "${IONODE_CLI_DIR}/lib/cmd_events.sh"
+source "${IONODE_CLI_DIR}/lib/cmd_watch.sh"
+
+# --- Help ---
+_show_help() {
+    printf '\n'
+    printf '  %s%s[IOnode]%s CLI v%s\n' "$(c_accent)" "$(c_bold)" "$(_rst)" "$IONODE_VERSION"
+    printf '  %sFleet management for NATS-addressable hardware nodes%s\n' "$(c_dim)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sUSAGE%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    ionode %s<command>%s [options]\n\n' "$(c_accent)" "$(_rst)"
+
+    printf '  %s%sFLEET%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %sdiscover%s        Find all nodes on the network\n' "$(c_accent)" "$(_rst)"
+    printf '    %sls%s              Compact fleet table\n' "$(c_accent)" "$(_rst)"
+    printf '    %sinfo%s   %s<node>%s  Detailed node info\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sgroup%s  %s<tag>%s   List nodes by tag\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sstatus%s %s[node]%s  Fleet or node health\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sHARDWARE%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %sread%s   %s<node> <sensor>%s           Read sensor value\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %swrite%s  %s<node> <actuator> <val>%s   Set actuator\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sgpio%s   %s<node> <pin> get|set [v]%s  Raw GPIO access\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sadc%s    %s<node> <pin>%s              Raw ADC read\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %spwm%s    %s<node> <pin> get|set [v]%s  Raw PWM access\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %suart%s   %s<node> read|write [text]%s  UART serial\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sdevices%s %s<node>%s                   List registered devices\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sCONFIG%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %sconfig%s    %s<node>%s                         Dump config\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %stag%s       %s<node> [tag]%s                   Get/set tag\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sheartbeat%s %s<node> <seconds>%s               Set heartbeat interval\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %srename%s    %s<node> <new>%s                   Rename (reboots)\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sdevice%s    %sadd <node> <n> <kind> <pin>%s    Register device\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sdevice%s    %sremove <node> <name>%s           Remove device\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sdevice%s    %slist <node>%s                    List devices\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sEVENTS%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %sevent set%s   %s<node> <sensor> --above|--below <v> [--cooldown <s>]%s\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sevent clear%s %s<node> <sensor>%s\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sevent list%s  %s<node>%s\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sMONITOR%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %swatch%s  %s[--heartbeats] [--events] [--tag <tag>]%s\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sGLOBAL OPTIONS%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %s--server, -s%s %s<url>%s  NATS server URL\n' "$(c_text)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %s--no-color%s          Disable colored output\n' "$(c_text)" "$(_rst)"
+    printf '    %s--json%s              Raw JSON output\n' "$(c_text)" "$(_rst)"
+    printf '    %s--version, -V%s       Show version\n' "$(c_text)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sCONFIG FILE%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %s~/.config/ionode/config%s\n' "$(c_dim)" "$(_rst)"
+    printf '    %sNATS_URL=nats://192.168.1.100:4222%s\n' "$(c_muted)" "$(_rst)"
+    printf '\n'
+
+    printf '  %s%sENVIRONMENT%s\n' "$(c_dim)" "$(c_bold)" "$(_rst)"
+    printf '    %sIONODE_NATS_URL%s    NATS server URL (overrides config file)\n' "$(c_text)" "$(_rst)"
+    printf '    %sNO_COLOR%s           Disable colors (https://no-color.org)\n' "$(c_text)" "$(_rst)"
+    printf '\n'
+
+    printf '  %sPriority: --server flag > IONODE_NATS_URL > config file > localhost%s\n' \
+        "$(c_muted)" "$(_rst)"
+    printf '\n'
+}
+
+# --- Parse global flags (before command) ---
+_IONODE_JSON_MODE=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-color)
+            disable_color
+            shift
+            ;;
+        --json)
+            _IONODE_JSON_MODE=true
+            disable_color
+            shift
+            ;;
+        --server|-s)
+            set_nats_url "$2"
+            shift 2
+            ;;
+        --version|-V)
+            echo "ionode ${IONODE_VERSION}"
+            exit 0
+            ;;
+        --help|-h)
+            _show_help
+            exit 0
+            ;;
+        -*)
+            err "Unknown option: $1"
+            _show_help
+            exit 1
+            ;;
+        *)
+            break  # First non-flag arg is the command
+            ;;
+    esac
+done
+
+# --- Dependency check ---
+check_nats_cli
+resolve_nats_url
+
+# --- Command Router ---
+
+if [[ $# -eq 0 ]]; then
+    _show_help
+    exit 0
+fi
+
+COMMAND="$1"
+shift
+
+case "$COMMAND" in
+    # Fleet
+    discover)   cmd_discover "$@" ;;
+    ls)         cmd_ls "$@" ;;
+    info)       cmd_info "$@" ;;
+    group)      cmd_group "$@" ;;
+    status)
+        if [[ $# -gt 0 ]] && [[ "$1" != --* ]]; then
+            cmd_status_node "$@"
+        else
+            cmd_status_fleet "$@"
+        fi
+        ;;
+
+    # Hardware
+    read)       cmd_read "$@" ;;
+    write)      cmd_write "$@" ;;
+    gpio)       cmd_gpio "$@" ;;
+    adc)        cmd_adc "$@" ;;
+    pwm)        cmd_pwm "$@" ;;
+    uart)       cmd_uart "$@" ;;
+    devices)    cmd_devices "$@" ;;
+
+    # Config
+    config)     cmd_config "$@" ;;
+    tag)        cmd_tag "$@" ;;
+    heartbeat)  cmd_heartbeat "$@" ;;
+    rename)     cmd_rename "$@" ;;
+    device)
+        if [[ $# -eq 0 ]]; then
+            err "device requires a subcommand: add, remove, list"
+            exit 1
+        fi
+        subcmd="$1"; shift
+        case "$subcmd" in
+            add)    cmd_device_add "$@" ;;
+            remove) cmd_device_remove "$@" ;;
+            list)   cmd_device_list "$@" ;;
+            *)      err "device subcommand must be 'add', 'remove', or 'list'"; exit 1 ;;
+        esac
+        ;;
+
+    # Events
+    event)      cmd_event "$@" ;;
+
+    # Monitor
+    watch)      cmd_watch "$@" ;;
+
+    # Meta
+    help)       _show_help ;;
+    version)    echo "ionode ${IONODE_VERSION}" ;;
+
+    *)
+        err "Unknown command: ${COMMAND}"
+        printf '  %sRun %sionode --help%s%s for usage.%s\n' \
+            "$(c_dim)" "$(c_text)" "$(_rst)" "$(c_dim)" "$(_rst)"
+        exit 1
+        ;;
+esac
