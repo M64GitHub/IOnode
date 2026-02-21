@@ -2,7 +2,8 @@
 
 ![Version](https://img.shields.io/badge/firmware-v0.2.0-ff8c00) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-ESP32-333)
 
-**Flash any ESP32. It speaks NATS.**
+**Flash any ESP32. It speaks NATS.**  |  [ionode.io](https://ionode.io) | [Flash from browser](https://ionode.io/flash.html)
+
 
 IOnode turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator becomes reachable over the network via simple request/reply. No SDK, no cloud, no account.
 
@@ -10,7 +11,6 @@ Flash it, name it, point it at a NATS server - done. Read sensors from a script,
 
 **Supported chips:** ESP32-C6 · ESP32-S3 · ESP32-C3 · ESP32
 
-[ionode.io](https://ionode.io) | [Flash from browser](https://ionode.io/flash.html)
 
 ```
 Your laptop / server / Raspberry Pi
@@ -35,7 +35,7 @@ Your laptop / server / Raspberry Pi
 - [OpenClaw Integration](#openclaw-integration) - natural language control
 - [Integrations](#integrations) - scripts, Node-RED, Home Assistant, anything
 
-**Documentation:** [`docs/`](docs/) - [Setup Guide](docs/SETUP.md) · [NATS API](docs/NATS-API.md) · [CLI Reference](docs/CLI.md) · [Release Notes](docs/RELEASE-NOTES.md)
+**Documentation:** [`docs/`](docs/) - [Setup Guide](docs/SETUP.md) · [CLI Reference](docs/CLI.md) · [Release Notes](docs/RELEASE-NOTES.md)
 
 ---
 
@@ -43,7 +43,7 @@ Your laptop / server / Raspberry Pi
 
 ### What you need
 
-- An **ESP32** board (C6, S3, C3, or classic) - [$3–5 from AliExpress](https://ionode.io/flash.html)
+- An **ESP32** board (C6, S3, C3, or classic) 
 - A **NATS server** running on your network - [setup guide](docs/SETUP.md)
 - [PlatformIO](https://platformio.org/) for building, or use the [browser-based flasher](https://ionode.io/flash.html)
 

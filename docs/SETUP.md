@@ -243,41 +243,7 @@ NATS WebSocket does not have CORS restrictions by default. If you're running beh
 
 ---
 
-## 5. Network Architecture
-
-```
-┌──────────────────────────────────────────────────────┐
-│                    NATS Server                        │
-│            port 4222 (TCP) + 8080 (WS)               │
-└──────────────┬───────────────────┬───────────────────┘
-               │                   │
-    ┌──────────┴──────────┐   ┌────┴──────────────┐
-    │   TCP :4222          │   │   WebSocket :8080  │
-    │                      │   │                    │
-    │  ┌─────────────┐    │   │  ┌──────────────┐  │
-    │  │ ionode-01   │    │   │  │ Browser      │  │
-    │  │ (ESP32)     │    │   │  │ Dashboard    │  │
-    │  └─────────────┘    │   │  └──────────────┘  │
-    │  ┌─────────────┐    │   │                    │
-    │  │ ionode-02   │    │   └────────────────────┘
-    │  │ (ESP32)     │    │
-    │  └─────────────┘    │
-    │  ┌─────────────┐    │
-    │  │ ionode CLI  │    │
-    │  │ (bash)      │    │
-    │  └─────────────┘    │
-    │  ┌─────────────┐    │
-    │  │ Scripts /   │    │
-    │  │ Node-RED    │    │
-    │  └─────────────┘    │
-    └─────────────────────┘
-```
-
-Everything talks through NATS. Same subjects, same protocol. The CLI, the web dashboard, a Node-RED flow, and a Python script all use the same `_ion.discover`, `{name}.hal.*`, and `{name}.config.*` subjects.
-
----
-
-## 6. Firewall Ports
+## 5. Firewall Ports
 
 | Port | Protocol | Purpose | Who connects | Required |
 |------|----------|---------|-------------|----------|
