@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ff8c00">
+<title>IOnode Fleet Dashboard</title>
+<style>
+/* ============================================================
+   IOnode Fleet Dashboard - CSS
+   Color palette from ionode.io/css/variables.css
+   ============================================================ */
+
+:root {
+  --bg-primary: #08090e;
+  --bg-secondary: #0d1019;
+  --bg-elevated: #141822;
+  --bg-card: #111520;
+  --bg-input: #0d1019;
+
+  --accent: #ff8c00;
+  --accent-dim: rgba(255, 140, 0, 0.15);
+  --accent-glow: rgba(255, 140, 0, 0.25);
+
+  --text-primary: #e8eaf0;
+  --text-secondary: #8b92a8;
+  --text-muted: #4a5068;
+
+  --led-blue: #4a9eff;
+  --led-purple: #b06aff;
+  --led-green: #00d4aa;
+  --led-red: #ff4757;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-accent: rgba(255, 140, 0, 0.25);
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* --- Connection Bar --- */
+#connection-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#connection-bar .brand {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+#connection-bar input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 6px 12px;
+  width: 280px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#connection-bar input:focus {
+  border-color: var(--accent);
+}
+
+.btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-outline {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--border-accent);
+}
+
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+.btn-danger {
+  background: var(--led-red);
+  color: #fff;
+}
+
+#conn-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+#conn-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: background 0.3s;
+}
+
+#conn-status.connected .dot { background: var(--led-green); }
+#conn-status.error .dot { background: var(--led-red); }
+#conn-status.connecting .dot { background: var(--accent); animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.spacer { flex: 1; }
+
+#tag-filter {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 10px;
+  width: 140px;
+  outline: none;
+}
+
+#tag-filter:focus { border-color: var(--accent); }
+
+#node-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* --- Main Layout --- */
+#app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+/* --- Fleet Grid --- */
+#fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* --- Node Card --- */
+.node-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.node-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 20px var(--accent-dim);
+}
+
+.node-card.offline { opacity: 0.5; }
+
+.node-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.node-card .node-name {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.node-card .chip-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.node-card .tag-badge {
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.node-card .online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--led-green);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.node-card.offline .online-dot { background: var(--led-red); }
+
+.node-card .card-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.node-card .stat {
+  font-size: 12px;
+}
+
+.node-card .stat-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.node-card .stat-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.node-card .card-devices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.node-card .dev-tag {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+}
+
+.dev-tag.sensor { color: var(--led-blue); background: rgba(74,158,255,0.1); }
+.dev-tag.actuator { color: var(--led-purple); background: rgba(176,106,255,0.1); }
+
+/* Heartbeat flash */
+.node-card.heartbeat-flash {
+  animation: hb-flash 0.6s ease-out;
+}
+
+@keyframes hb-flash {
+  0% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50% { box-shadow: 0 0 15px 3px var(--accent-glow); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* --- Signal Bar --- */
+.signal-bar {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 14px;
+}
+
+.signal-bar .bar {
+  width: 3px;
+  background: var(--text-muted);
+  border-radius: 1px;
+}
+
+.signal-bar .bar:nth-child(1) { height: 4px; }
+.signal-bar .bar:nth-child(2) { height: 7px; }
+.signal-bar .bar:nth-child(3) { height: 10px; }
+.signal-bar .bar:nth-child(4) { height: 14px; }
+
+.signal-bar.good .bar { background: var(--led-green); }
+.signal-bar.good .bar:nth-child(4) { background: var(--text-muted); }
+.signal-bar.ok .bar:nth-child(1),
+.signal-bar.ok .bar:nth-child(2) { background: var(--accent); }
+.signal-bar.weak .bar:nth-child(1) { background: var(--led-red); }
+.signal-bar.strong .bar { background: var(--led-green); }
+
+/* --- Node Detail Panel --- */
+#detail-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  justify-content: flex-end;
+}
+
+#detail-overlay.open {
+  display: flex;
+}
+
+#detail-panel {
+  width: 480px;
+  max-width: 90vw;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  height: 100vh;
+  overflow-y: auto;
+  padding: 24px;
+  animation: slide-in 0.25s ease-out;
+}
+
+@keyframes slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+#detail-panel .panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+#detail-panel .panel-header h2 {
+  font-size: 20px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+#detail-panel .close-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+#detail-panel .close-btn:hover { color: var(--text-primary); }
+
+.detail-section {
+  margin-bottom: 20px;
+}
+
+.detail-section h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.detail-row .label { color: var(--text-secondary); }
+.detail-row .value { color: var(--text-primary); font-family: var(--font-mono); }
+
+/* Actuator controls */
+.actuator-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.actuator-toggle.on {
+  background: var(--led-green);
+  border-color: var(--led-green);
+}
+
+.actuator-toggle .knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text-primary);
+  border-radius: 50%;
+  transition: left 0.2s;
+}
+
+.actuator-toggle.on .knob { left: 20px; }
+
+.pwm-slider {
+  width: 100%;
+  appearance: none;
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  outline: none;
+}
+
+.pwm-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.rgb-input {
+  width: 60px;
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+/* --- Event Log --- */
+#event-log {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+#event-log .log-header {
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+#event-log .log-header .count {
+  background: var(--accent-dim);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+#event-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.event-entry {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.event-entry:last-child { border-bottom: none; }
+
+.event-entry .ev-time { color: var(--text-muted); min-width: 70px; }
+.event-entry .ev-type { font-weight: 600; min-width: 60px; }
+.event-entry .ev-type.threshold { color: var(--accent); }
+.event-entry .ev-type.online { color: var(--led-green); }
+.event-entry .ev-device { color: var(--accent); min-width: 110px; }
+.event-entry .ev-detail { color: var(--text-secondary); }
+
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+
+.empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+.empty-state .hint { font-size: 12px; margin-top: 8px; color: var(--text-muted); }
+
+/* --- Config Panel Inside Detail --- */
+.config-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.config-field input, .config-field select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  flex: 1;
+}
+
+.config-field input:focus { border-color: var(--accent); }
+
+/* --- Responsive --- */
+@media (max-width: 600px) {
+  #connection-bar { padding: 10px 12px; }
+  #connection-bar input { width: 100%; }
+  #app { padding: 12px; }
+  #fleet-grid { grid-template-columns: 1fr; }
+  #detail-panel { width: 100vw; }
+}
+</style>
+</head>
+<body>
+
+<!-- Connection Bar -->
+<div id="connection-bar">
+  <span class="brand"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32" fill="none" style="vertical-align:-3px;margin-right:6px"><rect x="4" y="4" width="24" height="24" rx="4" stroke="#ff8c00" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="#ff8c00"/><line x1="16" y1="4" x2="16" y2="10" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="22" x2="16" y2="28" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="16" x2="10" y2="16" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/><line x1="22" y1="16" x2="28" y2="16" stroke="#ff8c00" stroke-width="2" stroke-linecap="round"/></svg>IOnode</span>
+  <input type="text" id="nats-url" placeholder="ws://192.168.1.100:8080" value="">
+  <button class="btn" id="connect-btn" onclick="toggleConnection()">Connect</button>
+  <div id="conn-status">
+    <span class="dot"></span>
+    <span id="conn-text">Disconnected</span>
+  </div>
+  <span class="spacer"></span>
+  <input type="text" id="tag-filter" placeholder="Filter by tag..." oninput="filterByTag()">
+  <span id="node-count"></span>
+</div>
+
+<!-- App -->
+<div id="app">
+  <!-- Empty state -->
+  <div id="empty-state" class="empty-state">
+    <div class="icon">⬡</div>
+    <p>Connect to a NATS server to discover your fleet</p>
+    <div class="hint">Enter a WebSocket URL above (e.g. ws://192.168.1.100:8080)</div>
+  </div>
+
+  <!-- Fleet Grid -->
+  <div id="fleet-grid" style="display:none;"></div>
+
+  <!-- Event Log -->
+  <div id="event-log" style="display:none;">
+    <div class="log-header">
+      ⚡ Event Log
+      <span class="count" id="event-count">0</span>
+      <span class="spacer"></span>
+      <button class="btn-outline btn-sm" onclick="clearEvents()">Clear</button>
+    </div>
+    <div id="event-list"></div>
+  </div>
+</div>
+
+<!-- Detail Overlay -->
+<div id="detail-overlay" onclick="closeDetailIfBg(event)">
+  <div id="detail-panel">
+    <div class="panel-header">
+      <h2 id="detail-name"></h2>
+      <span id="detail-chip" class="chip-badge"></span>
+      <button class="close-btn" onclick="closeDetail()">&times;</button>
+    </div>
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<script src="lib/nats.ws.iife.js"></script>
+<script>
+// ============================================================
+// IOnode Fleet Dashboard - Application Logic
+// ============================================================
+
+const { connect, StringCodec, createInbox } = window.natsws;
+const sc = StringCodec();
+
+// --- State ---
+let nc = null;  // NATS connection
+let heartbeatSub = null;
+let eventSub = null;
+const fleet = new Map();  // device_name → node data
+const events = [];
+let tagFilter = '';
+let selectedNode = null;
+
+// window.X assignments are at the end of the script
+
+// --- Connection ---
+async function toggleConnection() {
+  if (nc) {
+    await disconnect();
+  } else {
+    await doConnect();
+  }
+}
+
+async function doConnect() {
+  const url = document.getElementById('nats-url').value.trim();
+  if (!url) return;
+
+  setConnStatus('connecting', 'Connecting...');
+  document.getElementById('connect-btn').textContent = 'Connecting...';
+  document.getElementById('connect-btn').disabled = true;
+
+  try {
+    nc = await connect({ servers: url });
+    setConnStatus('connected', `Connected to ${url}`);
+    document.getElementById('connect-btn').textContent = 'Disconnect';
+    document.getElementById('connect-btn').disabled = false;
+
+    // Save URL to localStorage
+    localStorage.setItem('ionode-nats-url', url);
+
+    // Subscribe to heartbeats
+    heartbeatSub = nc.subscribe('_ion.heartbeat');
+    (async () => {
+      for await (const msg of heartbeatSub) {
+        handleHeartbeat(JSON.parse(sc.decode(msg.data)));
+      }
+    })();
+
+    // Subscribe to events
+    eventSub = nc.subscribe('*.events.>');
+    (async () => {
+      for await (const msg of eventSub) {
+        try {
+          handleEvent(JSON.parse(sc.decode(msg.data)), msg.subject);
+        } catch(e) {}
+      }
+    })();
+
+    // Also catch bare online events
+    const onlineSub = nc.subscribe('*.events');
+    (async () => {
+      for await (const msg of onlineSub) {
+        try {
+          handleEvent(JSON.parse(sc.decode(msg.data)), msg.subject);
+        } catch(e) {}
+      }
+    })();
+
+    // Watch for connection close
+    nc.closed().then(() => {
+      nc = null;
+      setConnStatus('', 'Disconnected');
+      document.getElementById('connect-btn').textContent = 'Connect';
+      document.getElementById('connect-btn').disabled = false;
+    });
+
+    // Discover fleet
+    await discoverFleet();
+
+  } catch (e) {
+    nc = null;
+    setConnStatus('error', `Failed: ${e.message}`);
+    document.getElementById('connect-btn').textContent = 'Connect';
+    document.getElementById('connect-btn').disabled = false;
+  }
+}
+
+async function disconnect() {
+  if (nc) {
+    await nc.drain();
+    nc = null;
+  }
+  setConnStatus('', 'Disconnected');
+  document.getElementById('connect-btn').textContent = 'Connect';
+}
+
+function setConnStatus(cls, text) {
+  const el = document.getElementById('conn-status');
+  el.className = cls;
+  document.getElementById('conn-text').textContent = text;
+}
+
+// --- Discovery ---
+async function discoverFleet() {
+  if (!nc) return;
+
+  // nc.request() only returns ONE reply. For multi-reply discovery,
+  // subscribe to a unique inbox, publish with that as reply-to,
+  // collect all responses within a timeout window.
+  try {
+    const inbox = createInbox();
+    const sub = nc.subscribe(inbox);
+    const seen = new Set();
+
+    // Ensure subscription is active on server before publishing
+    await nc.flush();
+
+    // Publish discover with our inbox as reply-to
+    nc.publish('_ion.discover', sc.encode(''), { reply: inbox });
+
+    // Collect replies for 3 seconds, then unsubscribe
+    const timer = setTimeout(() => { sub.unsubscribe(); }, 3000);
+
+    for await (const msg of sub) {
+      try {
+        const node = JSON.parse(sc.decode(msg.data));
+        if (!seen.has(node.device)) {
+          seen.add(node.device);
+          addOrUpdateNode(node);
+        }
+      } catch(e) {}
+    }
+    clearTimeout(timer);
+  } catch(e) {
+    // No nodes responded, that's ok - heartbeats will populate
+  }
+
+  showFleet();
+}
+
+// --- Heartbeat Handler ---
+function handleHeartbeat(data) {
+  const name = data.device;
+  if (!name) return;
+
+  const existing = fleet.get(name) || {};
+  fleet.set(name, {
+    ...existing,
+    device: name,
+    tag: data.tag || '',
+    version: data.version || existing.version || '',
+    uptime: data.uptime,
+    heap: data.heap,
+    rssi: data.rssi,
+    nats_reconnects: data.nats_reconnects,
+    sensors: data.sensors,
+    actuators: data.actuators,
+    events_fired: data.events_fired,
+    lastHeartbeat: Date.now(),
+    online: true,
+  });
+
+  renderFleet();
+  flashCard(name);
+
+  // Update detail panel if this node is selected
+  if (selectedNode === name) {
+    refreshDetail(name);
+  }
+}
+
+// --- Event Handler ---
+function handleEvent(data, subject) {
+  const entry = {
+    time: new Date(),
+    type: data.event || 'unknown',
+    device: data.device || subject.split('.')[0],
+    sensor: data.sensor || '',
+    value: data.value,
+    threshold: data.threshold,
+    direction: data.direction,
+    unit: data.unit || '',
+    ip: data.ip || '',
+    version: data.version || '',
+  };
+
+  events.unshift(entry);
+  if (events.length > 200) events.length = 200;
+
+  renderEvents();
+
+  // If it's an online event, query capabilities
+  if (data.event === 'online' && nc) {
+    queryCapabilities(entry.device);
+  }
+}
+
+async function queryCapabilities(deviceName) {
+  if (!nc) return;
+  try {
+    const resp = await nc.request(`${deviceName}.capabilities`, sc.encode(''), { timeout: 3000 });
+    const node = JSON.parse(sc.decode(resp.data));
+    addOrUpdateNode(node);
+    renderFleet();
+  } catch(e) {}
+}
+
+function addOrUpdateNode(data) {
+  const name = data.device;
+  const existing = fleet.get(name) || {};
+  fleet.set(name, {
+    ...existing,
+    device: name,
+    firmware: data.firmware,
+    version: data.version,
+    chip: data.chip,
+    free_heap: data.free_heap,
+    heap: data.free_heap || existing.heap,
+    rssi: data.rssi ?? existing.rssi,
+    ip: data.ip,
+    tag: data.tag || '',
+    hal: data.hal,
+    devices: data.devices || [],
+    lastHeartbeat: existing.lastHeartbeat || Date.now(),
+    online: true,
+  });
+}
+
+// --- Rendering ---
+function showFleet() {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('fleet-grid').style.display = 'grid';
+  document.getElementById('event-log').style.display = 'block';
+  renderFleet();
+}
+
+function renderFleet() {
+  const grid = document.getElementById('fleet-grid');
+  const filter = tagFilter.toLowerCase();
+
+  // Mark offline nodes (no heartbeat in 3× interval, assume 60s)
+  const now = Date.now();
+  for (const [name, node] of fleet) {
+    if (now - (node.lastHeartbeat || 0) > 180000) {
+      node.online = false;
+    }
+  }
+
+  // Filter & sort
+  let nodes = [...fleet.values()];
+  if (filter) {
+    nodes = nodes.filter(n => (n.tag || '').toLowerCase().includes(filter));
+  }
+  nodes.sort((a, b) => (a.device || '').localeCompare(b.device || ''));
+
+  grid.innerHTML = nodes.map(n => renderNodeCard(n)).join('');
+
+  // Update count
+  const total = fleet.size;
+  const online = [...fleet.values()].filter(n => n.online).length;
+  document.getElementById('node-count').textContent = `${online}/${total} online`;
+}
+
+function renderNodeCard(node) {
+  const name = node.device || '?';
+  const chip = node.chip || node.firmware || '';
+  const tag = node.tag || '';
+  const heap = node.heap || node.free_heap || 0;
+  const rssi = node.rssi;
+  const uptime = node.uptime || 0;
+  const offlineClass = node.online ? '' : 'offline';
+
+  const heapStr = heap > 1048576 ? `${(heap/1048576).toFixed(1)} MB` :
+                  heap > 1024 ? `${Math.round(heap/1024)} KB` : `${heap} B`;
+
+  const uptimeStr = formatUptime(uptime);
+  const signalHtml = renderSignalBar(rssi);
+
+  const sensorDevs = (node.devices || []).filter(d => isSensorKind(d.kind));
+  const actuatorDevs = (node.devices || []).filter(d => !isSensorKind(d.kind));
+
+  const devTags = [...sensorDevs.map(d => `<span class="dev-tag sensor">${d.name}</span>`),
+                   ...actuatorDevs.map(d => `<span class="dev-tag actuator">${d.name}</span>`)].join('');
+
+  return `
+    <div class="node-card ${offlineClass}" id="card-${name}" onclick="openDetail('${name}')">
+      <div class="card-header">
+        <span class="node-name">${name}</span>
+        <span class="chip-badge">${chip}</span>
+        ${tag ? `<span class="tag-badge">#${tag}</span>` : ''}
+        <span class="online-dot"></span>
+      </div>
+      <div class="card-stats">
+        <div class="stat">
+          <div class="stat-label">Heap</div>
+          <div class="stat-value">${heapStr}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Uptime</div>
+          <div class="stat-value">${uptimeStr}</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Signal</div>
+          <div class="stat-value">${signalHtml} ${rssi != null ? rssi + 'dB' : '-'}</div>
+        </div>
+      </div>
+      <div class="card-devices">${devTags}</div>
+    </div>
+  `;
+}
+
+function flashCard(name) {
+  const card = document.getElementById(`card-${name}`);
+  if (!card) return;
+  card.classList.remove('heartbeat-flash');
+  void card.offsetWidth; // trigger reflow
+  card.classList.add('heartbeat-flash');
+}
+
+function renderSignalBar(rssi) {
+  if (rssi == null) return '<span class="signal-bar"></span>';
+  let cls = 'weak';
+  if (rssi >= -50) cls = 'strong';
+  else if (rssi >= -60) cls = 'good';
+  else if (rssi >= -70) cls = 'ok';
+
+  return `<span class="signal-bar ${cls}">
+    <span class="bar"></span><span class="bar"></span>
+    <span class="bar"></span><span class="bar"></span>
+  </span>`;
+}
+
+function renderEvents() {
+  const list = document.getElementById('event-list');
+  document.getElementById('event-count').textContent = events.length;
+
+  if (events.length === 0) {
+    list.innerHTML = '<div style="padding:16px;color:var(--text-muted);text-align:center;font-size:12px;">No events yet</div>';
+    return;
+  }
+
+  list.innerHTML = events.slice(0, 50).map(ev => {
+    const time = ev.time.toLocaleTimeString();
+    const typeClass = ev.type === 'threshold' ? 'threshold' : ev.type === 'online' ? 'online' : '';
+
+    let detail = '';
+    if (ev.type === 'threshold') {
+      const dir = ev.direction === 'above' ? '▲' : '▼';
+      detail = `${ev.sensor} ${dir} ${ev.threshold} → ${ev.value}${ev.unit}`;
+    } else if (ev.type === 'online') {
+      detail = `v${ev.version} ${ev.ip}`;
+    }
+
+    return `<div class="event-entry">
+      <span class="ev-time">${time}</span>
+      <span class="ev-type ${typeClass}">${ev.type}</span>
+      <span class="ev-device">${ev.device}</span>
+      <span class="ev-detail">${detail}</span>
+    </div>`;
+  }).join('');
+}
+
+// --- Detail Panel ---
+async function openDetail(name) {
+  selectedNode = name;
+  const overlay = document.getElementById('detail-overlay');
+  overlay.classList.add('open');
+  document.getElementById('detail-name').textContent = name;
+
+  const node = fleet.get(name);
+  document.getElementById('detail-chip').textContent = node?.chip || '';
+
+  await refreshDetail(name);
+};
+
+async function refreshDetail(name) {
+  const node = fleet.get(name);
+  if (!node) return;
+
+  const content = document.getElementById('detail-content');
+  let html = '';
+
+  // System info
+  html += '<div class="detail-section"><h3>System</h3>';
+  html += detailRow('Firmware', `IOnode v${node.version || '?'}`);
+  html += detailRow('IP', node.ip || '-');
+  html += detailRow('Tag', node.tag || '-');
+  html += detailRow('Heap', formatHeap(node.heap || node.free_heap || 0));
+  html += detailRow('Uptime', formatUptime(node.uptime || 0));
+  if (node.rssi != null) {
+    html += detailRow('WiFi', `${renderSignalBar(node.rssi)} ${node.rssi} dBm`);
+  }
+  if (node.nats_reconnects != null) {
+    html += detailRow('NATS reconnects', node.nats_reconnects);
+  }
+  if (node.events_fired != null) {
+    html += detailRow('Events fired', node.events_fired);
+  }
+  html += '</div>';
+
+  // Devices - query fresh values
+  if (nc) {
+    try {
+      const resp = await nc.request(`${name}.hal.device.list`, sc.encode(''), { timeout: 3000 });
+      const devices = JSON.parse(sc.decode(resp.data));
+
+      const sensors = devices.filter(d => isSensorKind(d.kind));
+      const actuators = devices.filter(d => !isSensorKind(d.kind));
+
+      if (sensors.length > 0) {
+        html += '<div class="detail-section"><h3>Sensors</h3>';
+        for (const d of sensors) {
+          const val = d.value != null ? `${d.value} ${d.unit || ''}` : '-';
+          html += detailRow(d.name, `<span style="color:var(--led-blue)">${val}</span> <span style="color:var(--text-muted);font-size:11px">${d.kind}</span>`);
+        }
+        html += '</div>';
+      }
+
+      if (actuators.length > 0) {
+        html += '<div class="detail-section"><h3>Actuators</h3>';
+        for (const d of actuators) {
+          html += renderActuatorControl(name, d);
+        }
+        html += '</div>';
+      }
+    } catch(e) {
+      html += '<div class="detail-section"><h3>Devices</h3><div style="color:var(--text-muted);font-size:12px;padding:8px 0">Could not query devices</div></div>';
+    }
+  }
+
+  // Config section
+  html += `<div class="detail-section"><h3>Quick Config</h3>`;
+  html += `<div class="config-field">
+    <span class="label" style="color:var(--text-secondary);font-size:13px;min-width:70px">Tag</span>
+    <input type="text" id="cfg-tag" value="${node.tag || ''}" placeholder="e.g. greenhouse">
+    <button class="btn btn-sm" onclick="setTag('${name}')">Set</button>
+  </div>`;
+  html += `<div class="config-field">
+    <span class="label" style="color:var(--text-secondary);font-size:13px;min-width:70px">Heartbeat</span>
+    <input type="number" id="cfg-hb" value="60" min="0" max="3600" style="width:70px">
+    <span style="color:var(--text-muted);font-size:12px">sec</span>
+    <button class="btn btn-sm" onclick="setHeartbeat('${name}')">Set</button>
+  </div>`;
+  html += '</div>';
+
+  content.innerHTML = html;
+}
+
+function renderActuatorControl(deviceName, dev) {
+  const name = dev.name;
+  const kind = dev.kind;
+  const value = dev.value != null ? dev.value : 0;
+
+  if (kind === 'relay' || kind === 'digital_out') {
+    const isOn = value !== 0;
+    return `<div class="detail-row">
+      <span class="label">${name} <span style="color:var(--text-muted);font-size:11px">${kind}</span></span>
+      <div class="actuator-toggle ${isOn ? 'on' : ''}" onclick="toggleActuator('${deviceName}','${name}',${isOn ? 0 : 1})">
+        <div class="knob"></div>
+      </div>
+    </div>`;
+  }
+
+  if (kind === 'pwm') {
+    return `<div class="detail-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <div style="display:flex;justify-content:space-between">
+        <span class="label">${name} <span style="color:var(--text-muted);font-size:11px">${kind}</span></span>
+        <span class="value" id="pwm-val-${name}">${value}</span>
+      </div>
+      <input type="range" class="pwm-slider" min="0" max="255" value="${value}"
+        onchange="setPwm('${deviceName}','${name}',this.value)"
+        oninput="document.getElementById('pwm-val-${name}').textContent=this.value">
+    </div>`;
+  }
+
+  if (kind === 'rgb_led') {
+    const hex = '#' + (value || 0).toString(16).padStart(6, '0');
+    return `<div class="detail-row">
+      <span class="label">${name} <span style="color:var(--text-muted);font-size:11px">${kind}</span></span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="color" class="rgb-input" value="${hex}"
+          onchange="setRgb('${deviceName}','${name}',this.value)">
+        <button class="btn-outline btn-sm" onclick="setActuator('${deviceName}','${name}','0')">Off</button>
+      </div>
+    </div>`;
+  }
+
+  return detailRow(name, `${value} <span style="color:var(--text-muted);font-size:11px">${kind}</span>`);
+}
+
+// --- Actuator Actions ---
+async function toggleActuator(device, actuator, value) {
+  await setActuator(device, actuator, String(value));
+  setTimeout(() => refreshDetail(device), 200);
+}
+
+async function setPwm(device, actuator, value) {
+  await setActuator(device, actuator, String(value));
+}
+
+async function setRgb(device, actuator, hexColor) {
+  const r = parseInt(hexColor.substr(1, 2), 16);
+  const g = parseInt(hexColor.substr(3, 2), 16);
+  const b = parseInt(hexColor.substr(5, 2), 16);
+  const packed = (r << 16) | (g << 8) | b;
+  await setActuator(device, actuator, String(packed));
+}
+
+async function setActuator(device, actuator, value) {
+  if (!nc) return;
+  try {
+    await nc.request(`${device}.hal.${actuator}.set`, sc.encode(value), { timeout: 3000 });
+  } catch(e) {
+    console.error('Set actuator failed:', e);
+  }
+}
+
+// --- Config Actions ---
+async function setTag(device) {
+  if (!nc) return;
+  const tag = document.getElementById('cfg-tag').value;
+  try {
+    await nc.request(`${device}.config.tag.set`, sc.encode(tag), { timeout: 3000 });
+    const node = fleet.get(device);
+    if (node) node.tag = tag;
+    renderFleet();
+  } catch(e) {
+    console.error('Set tag failed:', e);
+  }
+}
+
+async function setHeartbeat(device) {
+  if (!nc) return;
+  const val = document.getElementById('cfg-hb').value;
+  try {
+    await nc.request(`${device}.config.heartbeat.set`, sc.encode(val), { timeout: 3000 });
+  } catch(e) {
+    console.error('Set heartbeat failed:', e);
+  }
+}
+
+function closeDetail() {
+  selectedNode = null;
+  document.getElementById('detail-overlay').classList.remove('open');
+}
+
+function closeDetailIfBg(event) {
+  if (event.target === document.getElementById('detail-overlay')) {
+    closeDetail();
+  }
+}
+
+function filterByTag() {
+  tagFilter = document.getElementById('tag-filter').value;
+  renderFleet();
+}
+
+function clearEvents() {
+  events.length = 0;
+  renderEvents();
+}
+
+// --- Helpers ---
+function detailRow(label, value) {
+  return `<div class="detail-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+}
+
+function isSensorKind(kind) {
+  return ['digital_in','analog_in','ntc_10k','ldr','internal_temp',
+          'clock_hour','clock_minute','clock_hhmm','nats_value','serial_text'].includes(kind);
+}
+
+function formatUptime(secs) {
+  if (!secs) return '-';
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function formatHeap(bytes) {
+  if (bytes > 1048576) return `${(bytes/1048576).toFixed(1)} MB`;
+  if (bytes > 1024) return `${Math.round(bytes/1024)} KB`;
+  return `${bytes} B`;
+}
+
+// --- Expose to window for inline onclick handlers ---
+window.toggleConnection = toggleConnection;
+window.closeDetail = closeDetail;
+window.closeDetailIfBg = closeDetailIfBg;
+window.filterByTag = filterByTag;
+window.clearEvents = clearEvents;
+window.openDetail = openDetail;
+window.toggleActuator = toggleActuator;
+window.setPwm = setPwm;
+window.setRgb = setRgb;
+window.setTag = setTag;
+window.setHeartbeat = setHeartbeat;
+
+// --- Init ---
+const savedUrl = localStorage.getItem('ionode-nats-url');
+if (savedUrl) {
+  document.getElementById('nats-url').value = savedUrl;
+}
+
+// Keyboard shortcut: Escape closes detail
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDetail();
+});
+</script>
+</body>
+</html>
