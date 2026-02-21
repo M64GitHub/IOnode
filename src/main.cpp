@@ -346,9 +346,9 @@ static void onNatsCapabilities(nats_client_t *client, const nats_msg_t *msg,
 
     w += snprintf(g_caps_json + w, sizeof(g_caps_json) - w,
         "{\"device\":\"%s\",\"firmware\":\"ionode\",\"version\":\"%s\","
-        "\"chip\":\"%s\",\"free_heap\":%u,\"ip\":\"%s\",",
+        "\"chip\":\"%s\",\"free_heap\":%u,\"rssi\":%d,\"ip\":\"%s\",",
         cfg_device_name, IONODE_VERSION, chip_name, ESP.getFreeHeap(),
-        WiFi.localIP().toString().c_str());
+        WiFi.RSSI(), WiFi.localIP().toString().c_str());
 
     /* Include tag if set */
     if (cfg_tag[0]) {

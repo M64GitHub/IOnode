@@ -4,11 +4,14 @@
 
 IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator on the board becomes instantly reachable over the network via simple request/reply.
 
-Flash it, name it, point it at a NATS server - and your hardware is on the network. Read sensors from a script, toggle a relay from Node-RED, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) to orchestrate your entire node fleet with natural language. The intelligence lives wherever you want it. IOnode just makes the hardware available.
+Flash it, name it, point it at a NATS server — and your hardware is on the network. Read sensors from a script, toggle a relay from Node-RED, manage your entire fleet from the CLI, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) to orchestrate everything with natural language. The intelligence lives wherever you want it. IOnode just makes the hardware available.
 
-Built to be hacked - [add any sensor or hardware you want](#adding-a-new-sensor-type).
+Built to be hacked — [add any sensor or hardware you want](#adding-a-new-sensor-type).
 
-→ **[OpenClaw Integration](#openclaw-integration)** - control IOnode with natural language
+→ **[Fleet Management](#fleet-management)** — tags, heartbeats, threshold events, remote config
+→ **[CLI Tool](#cli-tool)** — manage your fleet from the terminal
+→ **[Fleet Dashboard](#fleet-dashboard)** — live web UI for monitoring and configuration
+→ **[OpenClaw Integration](#openclaw-integration)** — control IOnode with natural language
 
 ```
 Your laptop / server / Raspberry Pi
@@ -26,7 +29,7 @@ Your laptop / server / Raspberry Pi
 ### 1. Flash
 
 ```bash
-git clone <this-repo> && cd IOnode
+git clone https://github.com/M64GitHub/IOnode && cd IOnode
 pio run -t upload          # builds + flashes (default: ESP32-C6)
 pio run -t uploadfs        # uploads LittleFS (config template + devices.json)
 ```
@@ -82,15 +85,83 @@ nats req ionode-01.hal.gpio.8.set "1"
 nats req ionode-01.hal.system.heap ""
 ```
 
+Or use the CLI:
+
+```bash
+ionode discover
+ionode read ionode-01 chip_temp
+ionode gpio ionode-01 8 get
+ionode status ionode-01
+```
+
 ---
 
-## Web UI
+## CLI Tool
 
-IOnode serves a configuration and control interface on port 80. Access it at `http://{device-name}.local/` or the device IP shown in the serial monitor on boot.
+`ionode` is a fleet management CLI with colored, formatted output matching the [ionode.io](https://ionode.io) website palette. Requires [`nats` CLI](https://github.com/nats-io/natscli) and [`jq`](https://jqlang.github.io/jq/).
+
+```bash
+sudo ln -sf "$(pwd)/cli/ionode" /usr/local/bin/ionode
+```
+
+```bash
+ionode discover                  # find all nodes on the network
+ionode ls                        # compact fleet table with RSSI, heap, chip
+ionode info ionode-01            # deep dive — system health, HAL, devices
+ionode read ionode-01 temp       # read a sensor
+ionode write ionode-01 fan 1     # set an actuator
+ionode watch                     # live heartbeat + event stream
+```
+
+Configure, provision, and monitor — all from the terminal:
+
+```bash
+ionode tag ionode-01 greenhouse                            # fleet grouping
+ionode device add ionode-01 temp ntc_10k 2 --unit C       # register a sensor
+ionode event set ionode-01 temp --above 28 --cooldown 30  # threshold alert
+ionode watch --tag greenhouse                              # monitor a group
+```
+
+Supports `--no-color`, `--json`, `--server`, and `NO_COLOR` env. Full reference: [`docs/CLI.md`](docs/CLI.md)
+
+---
+
+## Fleet Dashboard
+
+A single-file HTML dashboard that connects directly to NATS via WebSocket. No backend, no build system, no dependencies beyond a browser.
+
+> **⚠️ Prerequisite:** Your NATS server must have WebSocket enabled. This is NOT on by default. Add to your `nats-server.conf`:
+>
+> ```
+> websocket {
+>   port: 8080
+>   no_tls: true
+> }
+> ```
+>
+> Then restart `nats-server`. Docker users: expose port 8080 alongside 4222.
+
+Open `web/index.html` in a browser, enter your NATS WebSocket URL (`ws://192.168.1.100:8080`), and the dashboard populates itself.
+
+### Features
+
+- **Fleet overview** — node cards with online/offline indicators, chip type, tag, heap, RSSI
+- **Live updates** — heartbeat subscriptions keep the dashboard current in real-time
+- **Node detail** — click a node to see devices, read sensors, toggle actuators
+- **Configuration** — tag nodes, add/remove devices, set threshold events
+- **Event log** — live feed of threshold events as they fire
+
+The dashboard uses the exact same NATS subjects as the CLI. Same protocol, different UI. See [`docs/NATS-API.md`](docs/NATS-API.md) for the full operation map.
+
+---
+
+## Web UI (On-Device)
+
+Each IOnode serves a local configuration and control interface on port 80. Access it at `http://{device-name}.local/` or the device IP. This is for single-node management — for fleet-wide operations, use the [CLI](#cli-tool) or [Fleet Dashboard](#fleet-dashboard).
 
 ### Config tab
 
-Network and system settings (WiFi, NATS, device name, timezone). Also contains a live `devices.json` editor - read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
+Network and system settings (WiFi, NATS, device name, timezone, tag). Also contains a live `devices.json` editor — read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
 
 ### Devices tab
 
@@ -105,13 +176,11 @@ All registered devices with kind-appropriate controls:
 | `pwm` | Slider 0–255 with live value display |
 | `rgb_led` | Color picker + hex display + OFF button |
 
-An **Add Device** form at the top lets you register new sensors and actuators without editing JSON. Fields adapt to the selected kind - relay shows an Inverted checkbox, serial_text shows a Baud Rate field instead of a pin number.
-
-After any add or delete, the `devices.json` editor in the Config tab updates automatically.
+An **Add Device** form at the top lets you register new sensors and actuators without editing JSON. Fields adapt to the selected kind.
 
 ### Pins tab
 
-Direct hardware access without registering a device. Pick a pin number, a type (GPIO / ADC / PWM), and hit Read or Write. Useful for wiring verification and bring-up. PWM reads return the last written value (cached - PWM is write-only on the hardware side).
+Direct hardware access without registering a device. Pick a pin number, a type (GPIO / ADC / PWM), and hit Read or Write. Useful for wiring verification and bring-up.
 
 ### Status tab
 
@@ -119,9 +188,59 @@ Version, device name, uptime, heap, WiFi SSID + signal strength, IP address, NAT
 
 ---
 
+## Fleet Management
+
+IOnode supports fleet-level operations — tagging, group queries, health monitoring, threshold alerts, and full remote configuration — all via NATS. No reflash, no web UI required.
+
+### Tags & Group Discovery
+
+Tag nodes for fleet grouping. Tagged nodes subscribe to `_ion.group.{tag}` and respond to group queries with their full capabilities:
+
+```bash
+nats req ionode-01.config.tag.set 'greenhouse'
+nats req _ion.group.greenhouse ''              # all greenhouse nodes respond
+```
+
+Tags can be changed at runtime without reboot — the group subscription updates live. Tags appear in discovery responses and the Status tab.
+
+### Health Heartbeat
+
+Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s, configurable 0–3600, 0 disables):
+
+```json
+{
+  "device": "ionode-01", "tag": "greenhouse", "version": "0.2.0",
+  "uptime": 3600, "heap": 245000, "rssi": -52,
+  "nats_reconnects": 0, "sensors": 4, "actuators": 2, "events_fired": 3
+}
+```
+
+### Threshold Events
+
+Sensors (including internal chip temperature) can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown — fires once on crossing, re-arms when the value returns to the safe side:
+
+```bash
+nats req ionode-01.config.event.set '{"n":"chip_temp","t":45,"d":"above","cd":30}'
+nats sub 'ionode-01.events.>'
+```
+
+Events persist across reboots. Configurable via NATS, web API, and the web UI device cards.
+
+### Actuator State Persistence
+
+Relay and digital output (`relay`, `digital_out`) states survive reboots. State is persisted as the `"v"` field in `devices.json` with a 5-second debounce to protect flash from rapid writes. PWM and RGB LED values are NOT persisted — resuming arbitrary analog values on boot could be unsafe.
+
+### Remote Configuration
+
+The full device registry, tags, heartbeat, and events can be managed remotely via `{name}.config.>` NATS subjects — see [`docs/NATS-API.md`](docs/NATS-API.md) for the complete reference.
+
+---
+
 ## NATS Subject Reference
 
 All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are plain text or simple values. Responses come back via NATS request/reply.
+
+For the full protocol specification including payload formats, error handling, and CLI/web UI mappings, see [`docs/NATS-API.md`](docs/NATS-API.md).
 
 ### Core HAL (always available, zero config)
 
@@ -144,8 +263,6 @@ All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are 
 | `{name}.hal.device.list` | - | JSON array | All registered devices + values |
 
 ### Registered Devices (plugin sensors/actuators)
-
-Any device registered in `devices.json` is automatically routed under `{name}.hal.{device_name}`:
 
 | Subject | Payload | Response |
 |---------|---------|----------|
@@ -180,81 +297,23 @@ Any device registered in `devices.json` is automatically routed under `{name}.ha
 | `{name}.config.event.list` | - | JSON array | List configured events |
 | `{name}.config.name.set` | `new-name` | `{"ok":true}` | Rename node (reboots) |
 
-Capabilities response:
-
-```json
-{
-  "device": "ionode-01",
-  "firmware": "ionode",
-  "version": "0.2.0",
-  "chip": "ESP32-C6",
-  "free_heap": 156000,
-  "ip": "192.168.1.42",
-  "tag": "greenhouse",
-  "hal": {
-    "gpio": true, "adc": true, "pwm": true,
-    "dac": false, "uart": true, "system_temp": true
-  },
-  "devices": [
-    {"name": "chip_temp", "kind": "internal_temp", "value": 38.1, "unit": "C"},
-    {"name": "clock_hour", "kind": "clock_hour", "value": 14.0, "unit": "h"}
-  ]
-}
-```
-
----
-
-## Fleet Management
-
-IOnode supports fleet-level operations - tagging, group queries, health monitoring, threshold alerts, and full remote configuration - all via NATS. No reflash, no web UI required.
-
-### Tags & Group Discovery
-
-Tag nodes for fleet grouping. Tagged nodes subscribe to `_ion.group.{tag}` and respond to group queries with their full capabilities:
-
-```bash
-nats req ionode-01.config.tag.set 'greenhouse'
-nats req _ion.group.greenhouse ''              # all greenhouse nodes respond
-```
-
-Tags can be changed at runtime without reboot - the group subscription updates live. Tags appear in discovery responses and the Status tab.
-
-### Health Heartbeat
-
-Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s, configurable 0–3600, 0 disables):
-
-```json
-{
-  "device": "ionode-01", "tag": "greenhouse", "version": "0.2.0",
-  "uptime": 3600, "heap": 245000, "rssi": -52,
-  "nats_reconnects": 0, "sensors": 4, "actuators": 2, "events_fired": 3
-}
-```
-
-### Threshold Events
-
-Sensors (including internal chip temperature) can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown - fires once on crossing, re-arms when the value returns to the safe side:
-
-```bash
-nats req ionode-01.config.event.set '{"n":"chip_temp","t":45,"d":"above","cd":30}'
-nats sub 'ionode-01.events.>'
-```
-
-Events persist across reboots. Configurable via NATS, web API, and the web UI device cards.
-
-### Actuator State Persistence
-
-Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB are excluded - resuming a PWM mid-value on boot could be dangerous.
-
-### Remote Configuration
-
-The full device registry, tags, heartbeat, and events can be managed remotely via `{name}.config.>` NATS subjects - see the [NATS Subject Reference](#nats-subject-reference) above.
-
 ---
 
 ## Registering Sensors & Actuators
 
 Edit `data/devices.json` and upload with `pio run -t uploadfs`. Or let `devicesInit()` auto-register the built-ins (chip_temp, clock_hour, clock_minute, clock_hhmm, rgb_led) on first boot. The `rgb_led` device is only registered on boards with a built-in RGB LED (ESP32-C6, S3, C3).
+
+Or register devices remotely:
+
+```bash
+# Via CLI
+ionode device add ionode-01 room_temp ntc_10k 2 --unit C
+ionode device add ionode-01 fan relay 8 --inverted
+
+# Via NATS directly
+nats req ionode-01.config.device.add '{"n":"room_temp","k":"ntc_10k","p":2,"u":"C"}'
+nats req ionode-01.config.device.add '{"n":"fan","k":"relay","p":8,"i":true}'
+```
 
 ### devices.json format
 
@@ -289,15 +348,6 @@ Fields: `n`=name, `k`=kind, `p`=pin (255=virtual), `u`=unit, `i`=inverted, `ns`=
 | `relay` | actuator | `digitalWrite` with optional inversion |
 | `pwm` | actuator | `analogWrite(pin, 0-255)` |
 | `rgb_led` | actuator | Built-in RGB LED, packed `0xRRGGBB` value |
-
-Once registered, every device is automatically available via NATS:
-
-```bash
-nats req ionode-01.hal.room_temp ""       # -> 23.4
-nats req ionode-01.hal.heater.set "1"     # -> ok
-nats req ionode-01.hal.light ""           # -> 67.2
-nats req ionode-01.hal.room_temp.info ""  # -> {"name":"room_temp","kind":"ntc_10k",...}
-```
 
 ---
 
@@ -414,7 +464,7 @@ IOnode speaks plain NATS request/reply. Any system that can send a NATS message 
 
 ### Scripts
 
-The simplest integration - a shell script using the `nats` CLI:
+The simplest integration — a shell script using the `nats` CLI:
 
 ```bash
 # Read temperature and act on it
@@ -424,7 +474,7 @@ if (( $(echo "$TEMP > 30" | bc -l) )); then
 fi
 ```
 
-Run it from cron, a Raspberry Pi, a server - anywhere with the `nats` CLI installed.
+Run it from cron, a Raspberry Pi, a server — anywhere with the `nats` CLI installed.
 
 ### Node-RED
 
@@ -451,7 +501,7 @@ nats req {device}.hal.{actuator}.set "1" # write
 
 ## OpenClaw Integration
 
-[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that runs on your laptop or server and orchestrates NATS-connected devices using natural language. With the IOnode skill installed, OpenClaw discovers your nodes automatically and can read sensors, control actuators, and write persistent automation scripts - all from a chat interface.
+[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that runs on your laptop or server and orchestrates NATS-connected devices using natural language. With the IOnode skill installed, OpenClaw discovers your nodes automatically and can read sensors, control actuators, and write persistent automation scripts — all from a chat interface.
 
 ```
 You: "read gpio 1 from ionode-01 please"
@@ -465,7 +515,7 @@ OpenClaw: GPIO 1 is now high. ⚡
 ```
 
 
-> For *[WireClaw](https://wireclaw.io) users (AI reasoning loop on the chip, local rules engine, self-contained*)  
+> For *[WireClaw](https://wireclaw.io) users (AI reasoning loop on the chip, local rules engine, self-contained*)
 > Same `.hal.` protocol means OpenClaw talks to both interchangeably with the same commands.
 
 ### Install the IOnode Skill
@@ -488,7 +538,7 @@ export IONODE_NATS_URL="nats://192.168.1.100:4222"
 ```
 "What IOnode devices are on the network?"
 ```
-OpenClaw runs `ion.sh discover`, parses capabilities, and summarizes every node - chip type, free heap, registered sensors, HAL features.
+OpenClaw runs `ion.sh discover`, parses capabilities, and summarizes every node — chip type, free heap, registered sensors, HAL features.
 
 **Read sensors:**
 ```
@@ -515,9 +565,9 @@ OpenClaw writes a shell script using `ion.sh`, runs it as a background job, and 
 "When the calendar shows a meeting starting, dim the LED strip on ionode-02"
 ```
 
-### [WireClaw](https://wireclaw.io) + IOnode Together
+### WireClaw + IOnode Together
 
-[WireClaw](https://wireclaw.io) is the sibling project - a full AI agent running directly on an ESP32, with an on-device rules engine, Telegram integration, and LLM chat. Both projects share the same `.hal.` protocol, so OpenClaw addresses them identically for hardware access. A mixed fleet just works:
+[WireClaw](https://wireclaw.io) is the sibling project — a full AI agent running directly on an ESP32, with an on-device rules engine, Telegram integration, and LLM chat. Both projects share the same `.hal.` protocol, so OpenClaw addresses them identically for hardware access. A mixed fleet just works:
 
 ```
 "Read the temperature from wireclaw-01 and ionode-01 and compare them"
@@ -532,26 +582,37 @@ For WireClaw-specific features (on-device rules, Telegram, AI tools), use the [W
 
 ```
 IOnode/
-+-- platformio.ini          Build config (pioarduino, 4 chip targets)
-+-- partitions.csv          2MB flash layout
-+-- include/
-|   +-- version.h           IONODE_VERSION
-|   +-- devices.h           Device registry structs & API
-|   +-- nats_hal.h          HAL NATS handler
-|   +-- nats_config.h       Remote config NATS handler
-|   +-- web_config.h        Web UI server
-|   +-- setup_portal.h      Config portal
-+-- src/
-|   +-- main.cpp            Setup, loop, NATS, serial commands
-|   +-- devices.cpp         Registry, sensor reading, persistence, events engine
-|   +-- nats_hal.cpp        HAL request router (gpio/adc/pwm/uart/system)
-|   +-- nats_config.cpp     Remote config router (config.> subjects)
-|   +-- web_config.cpp      Web UI server + REST API + PROGMEM HTML/JS
-|   +-- setup_portal.cpp    WiFi AP + captive portal + config form
-+-- lib/nats/               nats_atoms - embedded NATS client library
-+-- data/
-    +-- config.json.example  Config template
-    +-- devices.json         Device registry (empty on first flash)
+├── platformio.ini             Build config (pioarduino, 4 chip targets)
+├── partitions.csv             2MB flash layout
+├── include/
+│   ├── version.h              IONODE_VERSION
+│   ├── devices.h              Device registry structs & API
+│   ├── nats_hal.h             HAL NATS handler
+│   ├── nats_config.h          Remote config NATS handler
+│   ├── web_config.h           Web UI server
+│   └── setup_portal.h         Config portal
+├── src/
+│   ├── main.cpp               Setup, loop, NATS, serial commands
+│   ├── devices.cpp            Registry, sensor reading, persistence, events engine
+│   ├── nats_hal.cpp           HAL request router (gpio/adc/pwm/uart/system)
+│   ├── nats_config.cpp        Remote config router (config.> subjects)
+│   ├── web_config.cpp         Web UI server + REST API + PROGMEM HTML/JS
+│   └── setup_portal.cpp       WiFi AP + captive portal + config form
+├── lib/nats/                  nats_atoms - embedded NATS client library
+├── data/
+│   ├── config.json.example
+│   └── devices.json
+├── cli/
+│   ├── ionode                 CLI entry point
+│   ├── lib/                   Command modules (output, nats, commands)
+│   └── README.md
+├── docs/
+│   ├── NATS-API.md            Protocol contract (source of truth)
+│   └── RELEASE-NOTES.md
+├── skill/                     OpenClaw integration skill
+│   └── ionode/
+├── TESTING-v0.2.0.md          Test plan
+└── README.md
 ```
 
 ---
