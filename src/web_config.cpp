@@ -1013,14 +1013,17 @@ else if(d.extra)h+='<div class="dev-meta">'+d.extra+'</div>';
 h+='<div class="dev-meta">'+d.value+'</div>';
 if(d.msg)h+='<div class="dev-meta" style="color:var(--text3)">"'+d.msg+'"</div>';
 if(d.ev_direction){
-h+='<div class="dev-meta" style="color:var(--accent)">Event: '+d.ev_direction+' '+d.ev_threshold+' (cd:'+d.ev_cooldown+'s) '+(d.ev_armed?'[armed]':'[fired]')+'</div>';
+h+='<div class="dev-meta" style="color:var(--accent)">Event: '+d.ev_direction+' '+d.ev_threshold+' (intv:'+d.ev_cooldown+'s) '+(d.ev_armed?'[armed]':'[fired]')+'</div>';
 h+='<div class="toggle-wrap"><button class="toggle-btn off-active" onclick="clearEvent(\''+d.name+'\')">Clear Event</button></div>';
-}else{
-h+='<div class="ev-form" style="margin-top:0.5rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">';
-h+='<select id="ev_d_'+d.name+'" style="width:auto;padding:0.3rem 0.5rem;font-size:0.75rem"><option value="above">above</option><option value="below">below</option></select>';
-h+='<input type="number" id="ev_t_'+d.name+'" placeholder="threshold" style="width:5rem;padding:0.3rem 0.5rem;font-size:0.75rem" step="0.1">';
-h+='<input type="number" id="ev_cd_'+d.name+'" placeholder="cd(s)" value="10" style="width:4rem;padding:0.3rem 0.5rem;font-size:0.75rem" min="1">';
-h+='<button class="toggle-btn" onclick="setEvent(\''+d.name+'\')" style="font-size:0.75rem;padding:0.3rem 0.6rem">Set Event</button>';
+}else if(d.kind!=='clock_hour'&&d.kind!=='clock_minute'&&d.kind!=='clock_hhmm'){
+h+='<div class="ev-form" style="margin-top:0.5rem;display:flex;gap:0.6rem;align-items:flex-end;flex-wrap:wrap">';
+h+='<div style="display:flex;flex-direction:column"><span style="font-size:0.6rem;color:var(--text3);margin-bottom:0.15rem">Direction</span>';
+h+='<select id="ev_d_'+d.name+'" style="width:auto;min-width:5rem;padding:0.3rem 1.8rem 0.3rem 0.5rem;font-size:0.75rem"><option value="above">above</option><option value="below">below</option></select></div>';
+h+='<div style="display:flex;flex-direction:column"><span style="font-size:0.6rem;color:var(--text3);margin-bottom:0.15rem">Threshold</span>';
+h+='<input type="number" id="ev_t_'+d.name+'" placeholder="value" style="width:5rem;padding:0.3rem 0.5rem;font-size:0.75rem" step="0.1"></div>';
+h+='<div style="display:flex;flex-direction:column"><span style="font-size:0.6rem;color:var(--text3);margin-bottom:0.15rem">Cooldown (s)</span>';
+h+='<input type="number" id="ev_cd_'+d.name+'" value="10" style="width:5rem;padding:0.3rem 0.5rem;font-size:0.75rem" min="1"></div>';
+h+='<button class="toggle-btn" onclick="setEvent(\''+d.name+'\')" style="font-size:0.75rem;padding:0.3rem 0.6rem">Set</button>';
 h+='</div>';
 }
 }
