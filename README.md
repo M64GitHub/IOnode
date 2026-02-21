@@ -454,7 +454,7 @@ Full setup walkthrough: [docs/SETUP.md](docs/SETUP.md)
 
 ## OpenClaw Integration
 
-[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that orchestrates NATS-connected devices using natural language. With the IOnode skill installed, OpenClaw discovers your nodes automatically and can read sensors, control actuators, and write custom automation - all from a chat interface (Telegram, Discord, etc.).
+[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that can orchestrates your NATS-connected devices using natural language. With the IOnode skill installed, OpenClaw discovers your nodes automatically and can read sensors, control actuators, and write custom automation - all from a chat interface (Telegram, Discord, etc.).
 
 ```
 You: "read temperature across the fleet"
@@ -472,11 +472,9 @@ Echo: I'll poll your GitHub Actions workflow every 60s.
 
 ### Install the Skill
 
-```bash
-openclaw install ionode
-```
+Manually copy `skill/ionode/` to `~/.openclaw/workspace/skills/ionode/`.
 
-Or manually copy `skill/ionode/` to `~/.openclaw/workspace/skills/ionode/`.
+Or ask OpenClaw to install it from this repo.
 
 ### What OpenClaw Can Do
 
@@ -560,6 +558,6 @@ IOnode/
 - **Flash from browser:** [ionode.io/flash.html](https://ionode.io/flash.html)
 - **Documentation:** [`docs/`](docs/) · [Setup](docs/SETUP.md) · [NATS API](docs/NATS-API.md) · [CLI](docs/CLI.md)
 - **WireClaw:** [wireclaw.io](https://wireclaw.io) - AI agent on ESP32, same protocol
-- **OpenClaw:** [openclaw.ai](https://github.com/openclaw/openclaw) - Natural language hardware control
+- **OpenClaw:** [openclaw](https://github.com/openclaw/openclaw) - Natural language hardware control
 
 *Part of the [WireClaw](https://github.com/M64GitHub/WireClaw) ecosystem.*
