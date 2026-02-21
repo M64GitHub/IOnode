@@ -2,7 +2,7 @@
 
 Version: 0.2.0
 
-This document is the single source of truth for every operation IOnode supports over NATS. The CLI, web UI, and any future tools implement this contract — nothing more, nothing less.
+This document is the single source of truth for every operation IOnode supports over NATS. The CLI, web UI, and any future tools implement this contract - nothing more, nothing less.
 
 Every operation is defined as: what NATS subject to call, what to send, what comes back, and what it means.
 
@@ -94,15 +94,15 @@ Every discovery/capabilities/group response returns this structure:
 ```
 
 Fields:
-- `device` — node name
-- `firmware` — `"ionode"` or `"wireclaw"` (both speak the same protocol)
-- `version` — firmware version string
-- `chip` — ESP32 variant (`ESP32`, `ESP32-C3`, `ESP32-C6`, `ESP32-S3`)
-- `free_heap` — free heap memory in bytes
-- `ip` — current IP address
-- `tag` — fleet group tag (empty string if untagged)
-- `hal` — available hardware abstraction features
-- `devices` — registered sensors and actuators with current values
+- `device` - node name
+- `firmware` - `"ionode"` or `"wireclaw"` (both speak the same protocol)
+- `version` - firmware version string
+- `chip` - ESP32 variant (`ESP32`, `ESP32-C3`, `ESP32-C6`, `ESP32-S3`)
+- `free_heap` - free heap memory in bytes
+- `ip` - current IP address
+- `tag` - fleet group tag (empty string if untagged)
+- `hal` - available hardware abstraction features
+- `devices` - registered sensors and actuators with current values
 
 ---
 
@@ -249,13 +249,13 @@ All config subjects use the `{name}.config.>` wildcard namespace.
 | List devices | `{name}.config.device.list` | `""` | JSON array |
 
 **Payload fields for device.add:**
-- `n` — device name (required)
-- `k` — device kind (required, see Supported Device Kinds)
-- `p` — pin number (required, 255 for virtual)
-- `u` — unit string (optional, default `""`)
-- `i` — inverted flag (optional, default `false`)
-- `bd` — baud rate (optional, for `serial_text` kind only)
-- `ns` — NATS subject (optional, for `nats_value` kind only)
+- `n` - device name (required)
+- `k` - device kind (required, see Supported Device Kinds)
+- `p` - pin number (required, 255 for virtual)
+- `u` - unit string (optional, default `""`)
+- `i` - inverted flag (optional, default `false`)
+- `bd` - baud rate (optional, for `serial_text` kind only)
+- `ns` - NATS subject (optional, for `nats_value` kind only)
 
 **CLI:** `ionode device add {name} {dev_name} {kind} {pin} [--unit C] [--inverted]`
 **CLI:** `ionode device remove {name} {dev_name}`
@@ -357,10 +357,10 @@ Events are edge-detected: fire once when the value crosses the threshold, re-arm
 | List events | `{name}.config.event.list` | `""` | JSON array |
 
 **Event payload fields:**
-- `n` — sensor name (required)
-- `t` — threshold value (required)
-- `d` — direction: `"above"` or `"below"` (required)
-- `cd` — cooldown in seconds (required)
+- `n` - sensor name (required)
+- `t` - threshold value (required)
+- `d` - direction: `"above"` or `"below"` (required)
+- `cd` - cooldown in seconds (required)
 
 **CLI:** `ionode event set {name} {sensor} --above {value} --cooldown {seconds}`
 **CLI:** `ionode event clear {name} {sensor}`
@@ -439,9 +439,9 @@ How the fleet web dashboard maps to NATS operations.
 
 ### On Connect
 
-1. Subscribe to `_ion.heartbeat` — builds/updates fleet state continuously
-2. Subscribe to `*.events.>` — populates event log
-3. Request `_ion.discover` — initial fleet population
+1. Subscribe to `_ion.heartbeat` - builds/updates fleet state continuously
+2. Subscribe to `*.events.>` - populates event log
+3. Request `_ion.discover` - initial fleet population
 
 ### Fleet Tab
 
@@ -512,7 +512,7 @@ Nodes return `{"error":"..."}` for malformed requests.
 
 ### Actuator State Persistence
 
-Relay and digital output (`relay`, `digital_out`) states are persisted in `devices.json` as the `"v"` field. On boot, saved values are restored automatically. PWM and RGB LED values are NOT persisted — resuming arbitrary PWM values on boot could be unsafe.
+Relay and digital output (`relay`, `digital_out`) states are persisted in `devices.json` as the `"v"` field. On boot, saved values are restored automatically. PWM and RGB LED values are NOT persisted - resuming arbitrary PWM values on boot could be unsafe.
 
 Persistence uses debounced saves (5-second delay) to protect flash from rapid writes.
 
@@ -522,7 +522,7 @@ When a node connects to NATS, it publishes an online event to `{name}.events` (n
 
 ### NATS Reconnect Counter
 
-The `nats_reconnects` counter increments on every NATS connection, including the first one after boot. A freshly booted node that connects successfully will report `nats_reconnects: 1`. This is expected behavior — it counts total connections, not just reconnections.
+The `nats_reconnects` counter increments on every NATS connection, including the first one after boot. A freshly booted node that connects successfully will report `nats_reconnects: 1`. This is expected behavior - it counts total connections, not just reconnections.
 
 ---
 
@@ -532,7 +532,7 @@ Documented here for planning purposes. These are not part of the current contrac
 
 ### JetStream Persistence
 
-Publishing heartbeats and events to JetStream streams would enable historical queries (last 24h of heartbeats, event history). This is a server-side configuration change — nodes publish to the same subjects, a JetStream stream captures them. Zero firmware changes.
+Publishing heartbeats and events to JetStream streams would enable historical queries (last 24h of heartbeats, event history). This is a server-side configuration change - nodes publish to the same subjects, a JetStream stream captures them. Zero firmware changes.
 
 ### Bulk Operations
 

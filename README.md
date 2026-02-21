@@ -4,14 +4,14 @@
 
 IOnode is a lightweight firmware that turns any ESP32 into a NATS-addressable hardware node. Every GPIO pin, ADC channel, sensor, and actuator on the board becomes instantly reachable over the network via simple request/reply.
 
-Flash it, name it, point it at a NATS server — and your hardware is on the network. Read sensors from a script, toggle a relay from Node-RED, manage your entire fleet from the CLI, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) to orchestrate everything with natural language. The intelligence lives wherever you want it. IOnode just makes the hardware available.
+Flash it, name it, point it at a NATS server - and your hardware is on the network. Read sensors from a script, toggle a relay from Node-RED, manage your entire fleet from the CLI, or pair it with [OpenClaw](https://github.com/openclaw/openclaw) to orchestrate everything with natural language. The intelligence lives wherever you want it. IOnode just makes the hardware available.
 
-Built to be hacked — [add any sensor or hardware you want](#adding-a-new-sensor-type).
+Built to be hacked - [add any sensor or hardware you want](#adding-a-new-sensor-type).
 
-→ **[Fleet Management](#fleet-management)** — tags, heartbeats, threshold events, remote config
-→ **[CLI Tool](#cli-tool)** — manage your fleet from the terminal
-→ **[Fleet Dashboard](#fleet-dashboard)** — live web UI for monitoring and configuration
-→ **[OpenClaw Integration](#openclaw-integration)** — control IOnode with natural language
+→ **[Fleet Management](#fleet-management)** - tags, heartbeats, threshold events, remote config
+→ **[CLI Tool](#cli-tool)** - manage your fleet from the terminal
+→ **[Fleet Dashboard](#fleet-dashboard)** - live web UI for monitoring and configuration
+→ **[OpenClaw Integration](#openclaw-integration)** - control IOnode with natural language
 
 ```
 Your laptop / server / Raspberry Pi
@@ -107,13 +107,13 @@ sudo ln -sf "$(pwd)/cli/ionode" /usr/local/bin/ionode
 ```bash
 ionode discover                  # find all nodes on the network
 ionode ls                        # compact fleet table with RSSI, heap, chip
-ionode info ionode-01            # deep dive — system health, HAL, devices
+ionode info ionode-01            # deep dive - system health, HAL, devices
 ionode read ionode-01 temp       # read a sensor
 ionode write ionode-01 fan 1     # set an actuator
 ionode watch                     # live heartbeat + event stream
 ```
 
-Configure, provision, and monitor — all from the terminal:
+Configure, provision, and monitor - all from the terminal:
 
 ```bash
 ionode tag ionode-01 greenhouse                            # fleet grouping
@@ -145,11 +145,11 @@ Open `web/index.html` in a browser, enter your NATS WebSocket URL (`ws://192.168
 
 ### Features
 
-- **Fleet overview** — node cards with online/offline indicators, chip type, tag, heap, RSSI
-- **Live updates** — heartbeat subscriptions keep the dashboard current in real-time
-- **Node detail** — click a node to see devices, read sensors, toggle actuators
-- **Configuration** — tag nodes, add/remove devices, set threshold events
-- **Event log** — live feed of threshold events as they fire
+- **Fleet overview** - node cards with online/offline indicators, chip type, tag, heap, RSSI
+- **Live updates** - heartbeat subscriptions keep the dashboard current in real-time
+- **Node detail** - click a node to see devices, read sensors, toggle actuators
+- **Configuration** - tag nodes, add/remove devices, set threshold events
+- **Event log** - live feed of threshold events as they fire
 
 The dashboard uses the exact same NATS subjects as the CLI. Same protocol, different UI. See [`docs/NATS-API.md`](docs/NATS-API.md) for the full operation map.
 
@@ -157,11 +157,11 @@ The dashboard uses the exact same NATS subjects as the CLI. Same protocol, diffe
 
 ## Web UI (On-Device)
 
-Each IOnode serves a local configuration and control interface on port 80. Access it at `http://{device-name}.local/` or the device IP. This is for single-node management — for fleet-wide operations, use the [CLI](#cli-tool) or [Fleet Dashboard](#fleet-dashboard).
+Each IOnode serves a local configuration and control interface on port 80. Access it at `http://{device-name}.local/` or the device IP. This is for single-node management - for fleet-wide operations, use the [CLI](#cli-tool) or [Fleet Dashboard](#fleet-dashboard).
 
 ### Config tab
 
-Network and system settings (WiFi, NATS, device name, timezone, tag). Also contains a live `devices.json` editor — read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
+Network and system settings (WiFi, NATS, device name, timezone, tag). Also contains a live `devices.json` editor - read-only by default, with an Edit button for power users who want to paste a full config in one shot. Saves directly to LittleFS and reloads devices immediately.
 
 ### Devices tab
 
@@ -190,7 +190,7 @@ Version, device name, uptime, heap, WiFi SSID + signal strength, IP address, NAT
 
 ## Fleet Management
 
-IOnode supports fleet-level operations — tagging, group queries, health monitoring, threshold alerts, and full remote configuration — all via NATS. No reflash, no web UI required.
+IOnode supports fleet-level operations - tagging, group queries, health monitoring, threshold alerts, and full remote configuration - all via NATS. No reflash, no web UI required.
 
 ### Tags & Group Discovery
 
@@ -201,7 +201,7 @@ nats req ionode-01.config.tag.set 'greenhouse'
 nats req _ion.group.greenhouse ''              # all greenhouse nodes respond
 ```
 
-Tags can be changed at runtime without reboot — the group subscription updates live. Tags appear in discovery responses and the Status tab.
+Tags can be changed at runtime without reboot - the group subscription updates live. Tags appear in discovery responses and the Status tab.
 
 ### Health Heartbeat
 
@@ -217,7 +217,7 @@ Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s, c
 
 ### Threshold Events
 
-Sensors (including internal chip temperature) can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown — fires once on crossing, re-arms when the value returns to the safe side:
+Sensors (including internal chip temperature) can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown - fires once on crossing, re-arms when the value returns to the safe side:
 
 ```bash
 nats req ionode-01.config.event.set '{"n":"chip_temp","t":45,"d":"above","cd":30}'
@@ -228,11 +228,11 @@ Events persist across reboots. Configurable via NATS, web API, and the web UI de
 
 ### Actuator State Persistence
 
-Relay and digital output (`relay`, `digital_out`) states survive reboots. State is persisted as the `"v"` field in `devices.json` with a 5-second debounce to protect flash from rapid writes. PWM and RGB LED values are NOT persisted — resuming arbitrary analog values on boot could be unsafe.
+Relay and digital output (`relay`, `digital_out`) states survive reboots. State is persisted as the `"v"` field in `devices.json` with a 5-second debounce to protect flash from rapid writes. PWM and RGB LED values are NOT persisted - resuming arbitrary analog values on boot could be unsafe.
 
 ### Remote Configuration
 
-The full device registry, tags, heartbeat, and events can be managed remotely via `{name}.config.>` NATS subjects — see [`docs/NATS-API.md`](docs/NATS-API.md) for the complete reference.
+The full device registry, tags, heartbeat, and events can be managed remotely via `{name}.config.>` NATS subjects - see [`docs/NATS-API.md`](docs/NATS-API.md) for the complete reference.
 
 ---
 
@@ -464,7 +464,7 @@ IOnode speaks plain NATS request/reply. Any system that can send a NATS message 
 
 ### Scripts
 
-The simplest integration — a shell script using the `nats` CLI:
+The simplest integration - a shell script using the `nats` CLI:
 
 ```bash
 # Read temperature and act on it
@@ -474,7 +474,7 @@ if (( $(echo "$TEMP > 30" | bc -l) )); then
 fi
 ```
 
-Run it from cron, a Raspberry Pi, a server — anywhere with the `nats` CLI installed.
+Run it from cron, a Raspberry Pi, a server - anywhere with the `nats` CLI installed.
 
 ### Node-RED
 
@@ -501,7 +501,7 @@ nats req {device}.hal.{actuator}.set "1" # write
 
 ## OpenClaw Integration
 
-[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that runs on your laptop or server and orchestrates NATS-connected devices using natural language. With the IOnode skill installed, OpenClaw discovers your nodes automatically and can read sensors, control actuators, and write persistent automation scripts — all from a chat interface.
+[OpenClaw](https://github.com/openclaw/openclaw) is an AI agent that runs on your laptop or server and orchestrates NATS-connected devices using natural language. With the IOnode skill installed, OpenClaw discovers your nodes automatically and can read sensors, control actuators, and write persistent automation scripts - all from a chat interface.
 
 ```
 You: "read gpio 1 from ionode-01 please"
@@ -538,7 +538,7 @@ export IONODE_NATS_URL="nats://192.168.1.100:4222"
 ```
 "What IOnode devices are on the network?"
 ```
-OpenClaw runs `ion.sh discover`, parses capabilities, and summarizes every node — chip type, free heap, registered sensors, HAL features.
+OpenClaw runs `ion.sh discover`, parses capabilities, and summarizes every node - chip type, free heap, registered sensors, HAL features.
 
 **Read sensors:**
 ```
@@ -567,7 +567,7 @@ OpenClaw writes a shell script using `ion.sh`, runs it as a background job, and 
 
 ### WireClaw + IOnode Together
 
-[WireClaw](https://wireclaw.io) is the sibling project — a full AI agent running directly on an ESP32, with an on-device rules engine, Telegram integration, and LLM chat. Both projects share the same `.hal.` protocol, so OpenClaw addresses them identically for hardware access. A mixed fleet just works:
+[WireClaw](https://wireclaw.io) is the sibling project - a full AI agent running directly on an ESP32, with an on-device rules engine, Telegram integration, and LLM chat. Both projects share the same `.hal.` protocol, so OpenClaw addresses them identically for hardware access. A mixed fleet just works:
 
 ```
 "Read the temperature from wireclaw-01 and ionode-01 and compare them"

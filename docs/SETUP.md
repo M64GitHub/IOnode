@@ -37,7 +37,7 @@ docker run -p 4222:4222 nats:latest
 
 ### Start
 
-For the firmware and CLI, **no configuration file is needed** — just start the server:
+For the firmware and CLI, **no configuration file is needed** - just start the server:
 
 ```bash
 nats-server
@@ -70,8 +70,8 @@ nats-server -c nats-server.conf
 ```
 
 Now you have two ports:
-- **4222** — standard NATS (firmware, CLI, scripts)
-- **8080** — WebSocket (browser dashboard)
+- **4222** - standard NATS (firmware, CLI, scripts)
+- **8080** - WebSocket (browser dashboard)
 
 ### Docker
 
@@ -159,7 +159,7 @@ sudo ln -sf "$(pwd)/cli/ionode" /usr/local/bin/ionode
 ### Dependencies
 
 - `nats` CLI (see above)
-- `jq` — `apt install jq` / `brew install jq`
+- `jq` - `apt install jq` / `brew install jq`
 
 ### Configure NATS Server
 
@@ -203,9 +203,9 @@ Your NATS server **must** have WebSocket enabled. This is the `websocket { port:
 ### Open
 
 Just open `web/dashboard/index.html` in a browser. Works from:
-- `file://` — double-click the file
-- Local server — `python3 -m http.server 8000` in the `web/dashboard/` directory
-- Hosted — GitHub Pages, nginx, any static file host
+- `file://` - double-click the file
+- Local server - `python3 -m http.server 8000` in the `web/dashboard/` directory
+- Hosted - GitHub Pages, nginx, any static file host
 
 ### Connect
 
@@ -235,7 +235,7 @@ The URL is saved in your browser's localStorage for next time.
 
 1. Are any IOnode devices on the network? Check: `nats req _ion.discover "" --replies=0 --timeout=3s`
 2. Are they connected to the same NATS server?
-3. Wait for heartbeats — nodes publish every 60s by default. You can also check the serial monitor for NATS connection status.
+3. Wait for heartbeats - nodes publish every 60s by default. You can also check the serial monitor for NATS connection status.
 
 **CORS issues**
 

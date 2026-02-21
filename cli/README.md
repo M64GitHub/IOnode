@@ -14,8 +14,8 @@ sudo ln -sf "$(pwd)/cli/ionode" /usr/local/bin/ionode
 
 ### Dependencies
 
-- **[nats CLI](https://github.com/nats-io/natscli)** — required
-- **[jq](https://jqlang.github.io/jq/)** — required for structured output
+- **[nats CLI](https://github.com/nats-io/natscli)** - required
+- **[jq](https://jqlang.github.io/jq/)** - required for structured output
 
 ## Configuration
 
@@ -52,10 +52,10 @@ ionode watch                 # live heartbeat + event stream
 ## Output
 
 - **Color:** True color (24-bit) matching the [ionode.io](https://ionode.io) website palette
-- `--no-color` — disable colors
-- `--json` — raw JSON output for scripting
-- `NO_COLOR` env var — respected per [no-color.org](https://no-color.org)
-- Non-TTY stdout — colors auto-disabled when piping
+- `--no-color` - disable colors
+- `--json` - raw JSON output for scripting
+- `NO_COLOR` env var - respected per [no-color.org](https://no-color.org)
+- Non-TTY stdout - colors auto-disabled when piping
 
 ## Commands
 

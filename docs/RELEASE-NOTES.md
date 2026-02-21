@@ -1,4 +1,4 @@
-# IOnode v0.2.0 — Fleet Management
+# IOnode v0.2.0 - Fleet Management
 
 IOnode goes from single-node tool to fleet-manageable platform. Six major additions, one principle: **IOnode stays dumb, the network stays smart.**
 
@@ -36,7 +36,7 @@ Full reference: [docs/CLI.md](CLI.md)
 
 ## Actuator State Persistence
 
-Relay and digital output devices now survive reboots. When you set a relay ON, it stays ON after power loss or restart. State is saved as the `"v"` field in `devices.json` with a 5-second debounce to protect flash from rapid toggling. PWM and RGB are intentionally excluded — resuming a PWM mid-value on boot could be dangerous, and RGB is cosmetic.
+Relay and digital output devices now survive reboots. When you set a relay ON, it stays ON after power loss or restart. State is saved as the `"v"` field in `devices.json` with a 5-second debounce to protect flash from rapid toggling. PWM and RGB are intentionally excluded - resuming a PWM mid-value on boot could be dangerous, and RGB is cosmetic.
 
 ---
 
@@ -44,14 +44,14 @@ Relay and digital output devices now survive reboots. When you set a relay ON, i
 
 New `{device_name}.config.>` wildcard subscription enables full remote management without touching the web UI or reflashing:
 
-- `config.device.add` / `config.device.remove` / `config.device.list` — manage the device registry
-- `config.tag.set` / `config.tag.get` — fleet grouping (see below)
-- `config.heartbeat.set` — adjust heartbeat interval
-- `config.event.set` / `config.event.clear` / `config.event.list` — threshold events (see below)
-- `config.name.set` — rename the node (triggers reboot)
-- `config.get` — dump current config (WiFi password excluded)
+- `config.device.add` / `config.device.remove` / `config.device.list` - manage the device registry
+- `config.tag.set` / `config.tag.get` - fleet grouping (see below)
+- `config.heartbeat.set` - adjust heartbeat interval
+- `config.event.set` / `config.event.clear` / `config.event.list` - threshold events (see below)
+- `config.name.set` - rename the node (triggers reboot)
+- `config.get` - dump current config (WiFi password excluded)
 
-Example — provision 10 nodes from one terminal:
+Example - provision 10 nodes from one terminal:
 
 ```bash
 for i in $(seq 1 10); do
@@ -76,7 +76,7 @@ ionode tag ionode-01 greenhouse
 ionode ls --tag greenhouse
 ```
 
-Tagged nodes subscribe to `_ion.group.{tag}` and respond with their full capabilities, just like `_ion.discover`. Tags can be changed at runtime without reboot — the group subscription is updated live.
+Tagged nodes subscribe to `_ion.group.{tag}` and respond with their full capabilities, just like `_ion.discover`. Tags can be changed at runtime without reboot - the group subscription is updated live.
 
 ---
 
@@ -113,7 +113,7 @@ ionode watch --heartbeats
 
 ## Threshold Events
 
-Sensors can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown — fires once on crossing, re-arms only when the value returns to the safe side.
+Sensors can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown - fires once on crossing, re-arms only when the value returns to the safe side.
 
 ```bash
 ionode event set ionode-01 chip_temp --above 45 --cooldown 30
@@ -140,15 +140,15 @@ Events persist across reboots (stored as flat keys in `devices.json`). Configura
 
 ## Other Changes
 
-- **RSSI in capabilities** — `WiFi.RSSI()` added to discovery/capabilities response
-- **Debounced flash writes** — `devices.json` flushes at most every 5s, `config.json` every 2s
+- **RSSI in capabilities** - `WiFi.RSSI()` added to discovery/capabilities response
+- **Debounced flash writes** - `devices.json` flushes at most every 5s, `config.json` every 2s
 - **NATS reconnect counter** tracked across session
 - **`config.json.example`** updated with `tag` and `heartbeat_interval` fields
-- **Web UI** — tag field in Config tab, extended Status tab with fleet telemetry
-- **Documentation** — restructured into `docs/` with NATS-API contract, CLI reference, and this changelog
+- **Web UI** - tag field in Config tab, extended Status tab with fleet telemetry
+- **Documentation** - restructured into `docs/` with NATS-API contract, CLI reference, and this changelog
 
 ---
 
 ## Compatibility
 
-All 4 targets build and are tested: ESP32-C6, ESP32-S3, ESP32-C3, classic ESP32. No breaking changes to existing config or device files — new fields are optional and default safely.
+All 4 targets build and are tested: ESP32-C6, ESP32-S3, ESP32-C3, classic ESP32. No breaking changes to existing config or device files - new fields are optional and default safely.

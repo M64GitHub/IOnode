@@ -30,10 +30,10 @@ ionode --version
 
 The CLI resolves the NATS server URL in this priority order:
 
-1. **`--server` / `-s` flag** — `ionode --server nats://10.0.0.1:4222 discover`
-2. **`IONODE_NATS_URL` env** — `export IONODE_NATS_URL="nats://192.168.1.100:4222"`
-3. **Config file** — `~/.config/ionode/config`
-4. **Default** — `nats://localhost:4222`
+1. **`--server` / `-s` flag** - `ionode --server nats://10.0.0.1:4222 discover`
+2. **`IONODE_NATS_URL` env** - `export IONODE_NATS_URL="nats://192.168.1.100:4222"`
+3. **Config file** - `~/.config/ionode/config`
+4. **Default** - `nats://localhost:4222`
 
 ### Config File
 
@@ -95,7 +95,7 @@ $ ionode ls
 
   DEVICE             CHIP         TAG    HEAP     RSSI      SENS    ACT
 ────────────────────────────────────────────────────────────────────────
-  ionode-01          ESP32-S3     —      192 KB   -74dB     4       1
+  ionode-01          ESP32-S3     -      192 KB   -74dB     4       1
 
   1 node(s)
 ```
@@ -120,7 +120,7 @@ $ ionode info ionode-01
   Firmware:        IOnode v0.2.0
   Chip:            ESP32-S3
   IP:              192.168.178.43
-  Tag:             —
+  Tag:             -
   Free heap:       189 KB
   Uptime:          3h 6m
   WiFi signal:     ▂▄▆█ -74dBm
@@ -289,7 +289,7 @@ $ ionode config ionode-01
   WiFi SSID:       MyNetwork
   NATS host:       192.168.1.100:4222
   Timezone:        CET-1CEST,M3.5.0,M10.5.0/3
-  Tag:             —
+  Tag:             -
   Heartbeat:       every 60s
 ```
 
@@ -340,10 +340,10 @@ $ ionode rename ionode-01 greenhouse-01
 Register a new sensor or actuator on the node.
 
 Options:
-- `--unit <U>` — unit string (e.g. `C`, `%`, `ppm`)
-- `--inverted` — invert digital logic
-- `--baud <N>` — baud rate (for `serial_text` kind)
-- `--nats <subject>` — NATS subject (for `nats_value` kind)
+- `--unit <U>` - unit string (e.g. `C`, `%`, `ppm`)
+- `--inverted` - invert digital logic
+- `--baud <N>` - baud rate (for `serial_text` kind)
+- `--nats <subject>` - NATS subject (for `nats_value` kind)
 
 ```
 $ ionode device add ionode-01 temp ntc_10k 2 --unit C
@@ -435,10 +435,10 @@ $ ionode watch
 ```
 
 Modes:
-- `ionode watch` — heartbeats + events (default)
-- `ionode watch --heartbeats` — heartbeats only
-- `ionode watch --events` — events only
-- `ionode watch --tag greenhouse` — filter by tag
+- `ionode watch` - heartbeats + events (default)
+- `ionode watch --heartbeats` - heartbeats only
+- `ionode watch --events` - events only
+- `ionode watch --tag greenhouse` - filter by tag
 
 **NATS:** `_ion.heartbeat` + `*.events.>` (subscribe)
 
@@ -462,11 +462,11 @@ The CLI uses true color (24-bit ANSI) matching the [ionode.io](https://ionode.io
 
 ### Visual Elements
 
-- **Signal bars:** `▂▄▆█` — color-coded by RSSI strength
-- **ADC bars:** `██░░░░░░░░░░░░░░░░░░` — proportional to 12-bit range
+- **Signal bars:** `▂▄▆█` - color-coded by RSSI strength
+- **ADC bars:** `██░░░░░░░░░░░░░░░░░░` - proportional to 12-bit range
 - **Event indicators:** `▲` above / `▼` below thresholds
 - **Status dots:** `●` green (armed/online) / orange (fired) / red (offline)
-- **Spinner:** `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` — during network operations
+- **Spinner:** `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` - during network operations
 
 ---
 
@@ -516,5 +516,5 @@ Unreachable nodes show a timeout message:
 
 ```
 $ ionode read offline-node chip_temp
-  ⏱  offline-node — no response
+  ⏱  offline-node - no response
 ```
