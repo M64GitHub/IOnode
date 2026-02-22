@@ -300,6 +300,171 @@ cmd_uart() {
     esac
 }
 
+cmd_i2c() {
+    if [[ -z "${1:-}" ]] || [[ -z "${2:-}" ]]; then
+        err "missing arguments"
+        printf '  %susage: ionode i2c <device> scan%s\n' "$(c_dim)" "$(_rst)"
+        printf '  %s       ionode i2c <device> detect <addr>%s\n' "$(c_dim)" "$(_rst)"
+        printf '  %s       ionode i2c <device> read <addr> [--reg R] [--len N]%s\n' "$(c_dim)" "$(_rst)"
+        printf '  %s       ionode i2c <device> write <addr> --reg R --data N[,N,...]%s\n' "$(c_dim)" "$(_rst)"
+        printf '  %s       ionode i2c <device> recover%s\n\n' "$(c_dim)" "$(_rst)"
+        return 1
+    fi
+    local device="$1"
+    local action="$2"
+    shift 2
+
+    case "$action" in
+        scan)
+            local result
+            if ! result=$(nats_req "${device}.hal.i2c.scan" "" "5s") || [[ -z "$result" ]]; then
+                timeout_msg "$device"
+                return 1
+            fi
+
+            if ! has_jq || [[ "$result" != "["* ]]; then
+                echo "$result"
+                return
+            fi
+
+            local count
+            count=$(echo "$result" | jq 'length' 2>/dev/null || echo 0)
+
+            header "I2C Scan  ·  ${device}"
+            printf '\n'
+
+            if [[ "$count" -eq 0 ]]; then
+                printf '  %sNo I2C devices found.%s\n\n' "$(c_dim)" "$(_rst)"
+                return
+            fi
+
+            echo "$result" | jq -r '.[]' 2>/dev/null | while IFS= read -r addr; do
+                local hex
+                hex=$(printf '0x%02X' "$addr")
+                printf '  %s%s%s  %s(%s)%s\n' \
+                    "$(c_accent)$(c_bold)" "$hex" "$(_rst)" \
+                    "$(c_dim)" "$addr" "$(_rst)"
+            done
+
+            printf '\n  %s%d device(s) found%s\n\n' "$(c_dim)" "$count" "$(_rst)"
+            ;;
+
+        detect)
+            if [[ -z "${1:-}" ]]; then
+                err "missing I2C address"
+                return 1
+            fi
+            local addr="$1"
+            local result
+            if ! result=$(nats_req "${device}.hal.i2c.${addr}.detect" "" "3s") || [[ -z "$result" ]]; then
+                timeout_msg "$device"
+                return 1
+            fi
+
+            local hex
+            hex=$(printf '0x%02X' "$addr")
+            if [[ "$result" == "true" ]]; then
+                printf '  %s%s%s  %s(%s)%s  %sfound%s\n' \
+                    "$(c_accent)" "$hex" "$(_rst)" \
+                    "$(c_dim)" "$addr" "$(_rst)" \
+                    "$(c_ok)" "$(_rst)"
+            else
+                printf '  %s%s%s  %s(%s)%s  %snot found%s\n' \
+                    "$(c_dim)" "$hex" "$(_rst)" \
+                    "$(c_dim)" "$addr" "$(_rst)" \
+                    "$(c_muted)" "$(_rst)"
+            fi
+            ;;
+
+        read)
+            if [[ -z "${1:-}" ]]; then
+                err "missing I2C address"
+                return 1
+            fi
+            local addr="$1"
+            shift
+            local reg=0 len=1
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --reg) reg="$2"; shift 2 ;;
+                    --len) len="$2"; shift 2 ;;
+                    *) err "unknown option: $1"; return 1 ;;
+                esac
+            done
+
+            local payload
+            payload=$(printf '{"reg":%s,"len":%s}' "$reg" "$len")
+            local result
+            if ! result=$(nats_req "${device}.hal.i2c.${addr}.read" "$payload" "3s") || [[ -z "$result" ]]; then
+                timeout_msg "$device"
+                return 1
+            fi
+
+            local hex
+            hex=$(printf '0x%02X' "$addr")
+            printf '  %sI2C %s reg %s%s  %s%s%s\n' \
+                "$(c_label)" "$hex" "$reg" "$(_rst)" \
+                "$(c_accent)" "$result" "$(_rst)"
+            ;;
+
+        write)
+            if [[ -z "${1:-}" ]]; then
+                err "missing I2C address"
+                return 1
+            fi
+            local addr="$1"
+            shift
+            local reg=0 data=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --reg) reg="$2"; shift 2 ;;
+                    --data) data="$2"; shift 2 ;;
+                    *) err "unknown option: $1"; return 1 ;;
+                esac
+            done
+            if [[ -z "$data" ]]; then
+                err "--data is required"
+                return 1
+            fi
+
+            local payload
+            payload=$(printf '{"reg":%s,"data":[%s]}' "$reg" "$data")
+            local result
+            if ! result=$(nats_req "${device}.hal.i2c.${addr}.write" "$payload" "3s") || [[ -z "$result" ]]; then
+                timeout_msg "$device"
+                return 1
+            fi
+
+            if [[ "$result" == "ok" ]]; then
+                local hex
+                hex=$(printf '0x%02X' "$addr")
+                printf '  %sI2C %s%s  %s← wrote reg %s%s\n' \
+                    "$(c_ok)" "$hex" "$(_rst)" \
+                    "$(c_ok)" "$reg" "$(_rst)"
+            else
+                printf '  %s%s%s\n' "$(c_err)" "$result" "$(_rst)"
+                return 1
+            fi
+            ;;
+
+        recover)
+            local result
+            if ! result=$(nats_req "${device}.hal.i2c.recover" "" "3s") || [[ -z "$result" ]]; then
+                timeout_msg "$device"
+                return 1
+            fi
+            printf '  %sI2C bus recovery%s  %s%s%s\n' \
+                "$(c_label)" "$(_rst)" \
+                "$(c_ok)" "$result" "$(_rst)"
+            ;;
+
+        *)
+            err "i2c action must be 'scan', 'detect', 'read', 'write', or 'recover'"
+            return 1
+            ;;
+    esac
+}
+
 cmd_devices() {
     if [[ -z "${1:-}" ]]; then
         err "missing argument"

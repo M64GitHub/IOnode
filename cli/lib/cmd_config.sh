@@ -186,19 +186,29 @@ cmd_rename() {
 }
 
 cmd_device_add() {
-    if [[ -z "${1:-}" ]] || [[ -z "${2:-}" ]] || [[ -z "${3:-}" ]] || [[ -z "${4:-}" ]]; then
+    if [[ -z "${1:-}" ]] || [[ -z "${2:-}" ]] || [[ -z "${3:-}" ]]; then
         err "missing arguments"
-        printf '  %susage: ionode device add <device> <name> <kind> <pin> [--unit U] [--inverted] [--baud N] [--nats subj]%s\n\n' "$(c_dim)" "$(_rst)"
+        printf '  %susage: ionode device add <device> <name> <kind> [pin] [options]%s\n' "$(c_dim)" "$(_rst)"
+        printf '  %soptions: --unit U  --inverted  --baud N  --nats subj%s\n' "$(c_dim)" "$(_rst)"
+        printf '  %s         --i2c-addr A  --channel C  --template T%s\n' "$(c_dim)" "$(_rst)"
+        printf '  %s         --reg-len N  --scale F%s\n\n' "$(c_dim)" "$(_rst)"
         return 1
     fi
     local device="$1"
     local dev_name="$2"
     local kind="$3"
-    local pin="$4"
-    shift 4
+    shift 3
+
+    # Check if next arg is a pin (number) or a flag
+    local pin="255"
+    if [[ $# -gt 0 ]] && [[ "$1" =~ ^[0-9]+$ ]]; then
+        pin="$1"
+        shift
+    fi
 
     # Parse optional flags
     local unit="" inverted=false baud="" nats_subj=""
+    local i2c_addr="" channel="" tmpl="" reg_len="" scale=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --unit)
@@ -211,6 +221,21 @@ cmd_device_add() {
             --nats)
                 if [[ $# -lt 2 ]]; then err "--nats requires a value"; return 1; fi
                 nats_subj="$2"; shift 2 ;;
+            --i2c-addr)
+                if [[ $# -lt 2 ]]; then err "--i2c-addr requires a value"; return 1; fi
+                i2c_addr="$2"; shift 2 ;;
+            --channel)
+                if [[ $# -lt 2 ]]; then err "--channel requires a value"; return 1; fi
+                channel="$2"; pin="$2"; shift 2 ;;
+            --template)
+                if [[ $# -lt 2 ]]; then err "--template requires a value"; return 1; fi
+                tmpl="$2"; shift 2 ;;
+            --reg-len)
+                if [[ $# -lt 2 ]]; then err "--reg-len requires a value"; return 1; fi
+                reg_len="$2"; shift 2 ;;
+            --scale)
+                if [[ $# -lt 2 ]]; then err "--scale requires a value"; return 1; fi
+                scale="$2"; shift 2 ;;
             -*) err "unknown option: $1"; return 1 ;;
             *)  err "unexpected argument: $1"; return 1 ;;
         esac
@@ -227,6 +252,18 @@ cmd_device_add() {
     if [[ -n "$baud" ]]; then
         payload+=",\"bd\":${baud}"
     fi
+    if [[ -n "$i2c_addr" ]]; then
+        payload+=",\"ia\":${i2c_addr}"
+    fi
+    if [[ -n "$tmpl" ]]; then
+        payload+=",\"dt\":\"${tmpl}\""
+    fi
+    if [[ -n "$reg_len" ]]; then
+        payload+=",\"rl\":${reg_len}"
+    fi
+    if [[ -n "$scale" ]]; then
+        payload+=",\"sc\":${scale}"
+    fi
     payload+="}"
 
     local result
@@ -241,13 +278,20 @@ cmd_device_add() {
         if [[ "$ok" == "true" ]]; then
             local kind_color="c_sensor"
             case "$kind" in
-                digital_out|relay|pwm|rgb_led) kind_color="c_actuator" ;;
+                digital_out|relay|pwm|rgb_led|ssd1306) kind_color="c_actuator" ;;
             esac
-            printf '  %s+%s  %s%s%s  %s%s%s  %spin %s%s\n' \
+            local desc="pin $pin"
+            if [[ -n "$i2c_addr" ]]; then
+                desc="I2C 0x$(printf '%02X' "$i2c_addr")"
+                if [[ -n "$channel" ]]; then
+                    desc+=" ch$channel"
+                fi
+            fi
+            printf '  %s+%s  %s%s%s  %s%s%s  %s%s%s\n' \
                 "$(c_ok)" "$(_rst)" \
                 "$($kind_color)" "$dev_name" "$(_rst)" \
                 "$(c_dim)" "$kind" "$(_rst)" \
-                "$(c_muted)" "$pin" "$(_rst)"
+                "$(c_muted)" "$desc" "$(_rst)"
         else
             local error detail
             error=$(json_str "$result" "error")

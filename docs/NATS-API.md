@@ -1,6 +1,6 @@
 # IOnode NATS API Contract
 
-Version: 0.2.0
+Version: 0.3.0
 
 This document is the single source of truth for every operation IOnode supports over NATS. The CLI, web UI, and any future tools implement this contract - nothing more, nothing less.
 
@@ -82,6 +82,7 @@ Every discovery/capabilities/group response returns this structure:
     "pwm": true,
     "dac": false,
     "uart": true,
+    "i2c": true,
     "system_temp": true
   },
   "devices": [
@@ -144,6 +145,20 @@ Direct hardware read/write operations. These work on any node, even with zero de
 | Write UART | `{name}.hal.uart.write` | text | `ok` | Requires `serial_text` device |
 
 **CLI:** `ionode uart {name} read` / `ionode uart {name} write {text}`
+
+### I2C
+
+| Operation | Subject | Payload | Response | Notes |
+|-----------|---------|---------|----------|-------|
+| Scan bus | `{name}.hal.i2c.scan` | `""` | `[60,104,118]` | Array of detected addresses |
+| Detect device | `{name}.hal.i2c.{addr}.detect` | `""` | `true` or `false` | Addresses are decimal |
+| Read register | `{name}.hal.i2c.{addr}.read` | `{"reg":0,"len":2}` | `[0,255]` | Byte array |
+| Write register | `{name}.hal.i2c.{addr}.write` | `{"reg":0,"data":[1,2]}` | `ok` | |
+| Bus recovery | `{name}.hal.i2c.recover` | `""` | `ok` | Toggles SCL 9 times |
+
+Addresses in subjects are decimal (e.g., `i2c.60.detect` for I2C address 0x3C). The bus is temporarily initialized if no I2C devices are registered.
+
+**CLI:** `ionode i2c {name} scan` / `ionode i2c {name} detect {addr}` / `ionode i2c {name} read {addr} --reg N --len N` / `ionode i2c {name} write {addr} --reg N --data N,N,...`
 
 ### System Queries
 
@@ -217,10 +232,16 @@ Operations on named sensors and actuators registered in `devices.json`.
 | `clock_hhmm` | sensor | HHMM format (e.g. 1430) |
 | `nats_value` | sensor | Subscribes to NATS subject, stores last value |
 | `serial_text` | sensor | Reads UART1 lines, parses numeric value |
+| `i2c_generic` | sensor | Raw I2C register read, configurable addr/reg/len/scale |
+| `i2c_bme280` | sensor | BME280 temp/humidity/pressure, channel via pin 0/1/2 |
+| `i2c_bh1750` | sensor | BH1750 ambient light (lux) |
+| `i2c_sht31` | sensor | SHT31 temp/humidity, channel via pin 0/1 |
+| `i2c_ads1115` | sensor | ADS1115 16-bit ADC, channel via pin 0–3 |
 | `digital_out` | actuator | `digitalWrite` |
 | `relay` | actuator | `digitalWrite` with optional inversion |
 | `pwm` | actuator | `analogWrite` 0–255 |
 | `rgb_led` | actuator | Built-in RGB LED, packed `0xRRGGBB` |
+| `ssd1306` | actuator | SSD1306 OLED text display, template-driven |
 
 ---
 
@@ -251,13 +272,17 @@ All config subjects use the `{name}.config.>` wildcard namespace.
 **Payload fields for device.add:**
 - `n` - device name (required)
 - `k` - device kind (required, see Supported Device Kinds)
-- `p` - pin number (required, 255 for virtual)
+- `p` - pin number (required, 255 for virtual; channel selector for I2C multi-value sensors)
 - `u` - unit string (optional, default `""`)
 - `i` - inverted flag (optional, default `false`)
 - `bd` - baud rate (optional, for `serial_text` kind only)
 - `ns` - NATS subject (optional, for `nats_value` kind only)
+- `ia` - I2C slave address (optional, for I2C kinds, 0–127)
+- `dt` - display template (optional, for `ssd1306` kind, `{device_name}` tokens replaced with live values)
+- `rl` - I2C register read length (optional, for `i2c_generic`, 1 or 2, default 1)
+- `sc` - I2C scale multiplier (optional, for `i2c_generic`, default 1.0)
 
-**CLI:** `ionode device add {name} {dev_name} {kind} {pin} [--unit C] [--inverted]`
+**CLI:** `ionode device add {name} {dev_name} {kind} [pin] [--unit C] [--inverted] [--i2c-addr A] [--channel C] [--template T] [--reg-len N] [--scale F]`
 **CLI:** `ionode device remove {name} {dev_name}`
 **CLI:** `ionode device list {name}`
 
@@ -399,6 +424,11 @@ Complete command map for `ionode.sh`. Every command maps to one or more NATS ope
 | `ionode pwm {name} {pin} get` | Read PWM | `{name}.hal.pwm.{pin}.get` |
 | `ionode uart {name} read` | Read UART | `{name}.hal.uart.read` |
 | `ionode uart {name} write {text}` | Write UART | `{name}.hal.uart.write` |
+| `ionode i2c {name} scan` | Scan I2C bus | `{name}.hal.i2c.scan` |
+| `ionode i2c {name} detect {addr}` | Detect I2C device | `{name}.hal.i2c.{addr}.detect` |
+| `ionode i2c {name} read {addr}` | Read I2C register | `{name}.hal.i2c.{addr}.read` |
+| `ionode i2c {name} write {addr}` | Write I2C register | `{name}.hal.i2c.{addr}.write` |
+| `ionode i2c {name} recover` | Bus recovery | `{name}.hal.i2c.recover` |
 | `ionode devices {name}` | List registered devices | `{name}.hal.device.list` |
 
 ### Configuration
@@ -526,7 +556,7 @@ The `nats_reconnects` counter increments on every NATS connection, including the
 
 ---
 
-## 10. Future Considerations (Not in v0.2.0)
+## 10. Future Considerations
 
 Documented here for planning purposes. These are not part of the current contract.
 

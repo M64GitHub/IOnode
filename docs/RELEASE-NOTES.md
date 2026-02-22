@@ -1,154 +1,186 @@
-# IOnode v0.2.0 - Fleet Management
+# IOnode v0.3.0 - I2C Sensors & OLED Display
 
-IOnode goes from single-node tool to fleet-manageable platform. Six major additions, one principle: **IOnode stays dumb, the network stays smart.**
+I2C support unlocks the largest sensor ecosystem and OLED displays. Five sensor drivers, a text display, and raw bus access - all manageable via NATS, CLI, and web UI.
 
 ---
 
-## CLI Fleet Management Tool
+## I2C Sensor Drivers
 
-New `ionode` CLI for managing your entire fleet from the terminal. 28 commands across 5 categories: fleet discovery, hardware access, configuration, events, and live monitoring.
+Raw Wire.h drivers for five sensor families. No external libraries - each driver is 50-150 lines of register reads, keeping flash usage under 18KB total.
+
+| Kind | Sensor | Channels | Description |
+|------|--------|----------|-------------|
+| `i2c_bme280` | BME280 | 3 | Temperature (pin=0), humidity (pin=1), pressure (pin=2) |
+| `i2c_bh1750` | BH1750 | 1 | Ambient light in lux |
+| `i2c_sht31` | SHT31 | 2 | Temperature (pin=0), humidity (pin=1) |
+| `i2c_ads1115` | ADS1115 | 4 | 16-bit ADC, channels via pin 0-3 |
+| `i2c_generic` | Any | 1 | Raw register read with configurable address, register, length, scale |
+
+### Multi-Value Sensors
+
+Sensors that return multiple values (BME280, SHT31, ADS1115) use the `pin` field as a channel selector. Register one device per channel:
 
 ```bash
-ionode discover              # find all nodes
-ionode ls                    # compact fleet table
-ionode info ionode-01        # deep dive on one node
-ionode read ionode-01 temp   # read a sensor
-ionode write ionode-01 fan 1 # set an actuator
-ionode watch                 # live heartbeat + event stream
+ionode device add ionode-01 bme_temp i2c_bme280 0 --unit C --i2c-addr 118
+ionode device add ionode-01 bme_humi i2c_bme280 1 --unit % --i2c-addr 118
+ionode device add ionode-01 bme_pres i2c_bme280 2 --unit hPa --i2c-addr 118
 ```
 
-Features:
-- True color (24-bit) output matching the [ionode.io](https://ionode.io) website palette
-- WiFi signal bars, ADC mini-bars, status indicators, spinner animations
-- XDG-compliant config file (`~/.config/ionode/config`)
-- `--no-color`, `--json`, `--server` flags
-- `NO_COLOR` env var and non-TTY auto-detection
-- Clean error messages with usage hints for every command
-- Device deduplication on multi-reply discovery
+Per-address reading cache ensures multiple channel devices don't cause redundant I2C transactions. Each channel device gets its own EMA smoothing, sparkline history, and threshold events.
 
-Requires the [`nats` CLI](https://github.com/nats-io/natscli) and [`jq`](https://jqlang.github.io/jq/).
+### Generic I2C Sensor
 
-Install: `sudo ln -sf $(pwd)/cli/ionode /usr/local/bin/ionode`
-
-Full reference: [docs/CLI.md](CLI.md)
-
----
-
-## Actuator State Persistence
-
-Relay and digital output devices now survive reboots. When you set a relay ON, it stays ON after power loss or restart. State is saved as the `"v"` field in `devices.json` with a 5-second debounce to protect flash from rapid toggling. PWM and RGB are intentionally excluded - resuming a PWM mid-value on boot could be dangerous, and RGB is cosmetic.
-
----
-
-## NATS Remote Configuration
-
-New `{device_name}.config.>` wildcard subscription enables full remote management without touching the web UI or reflashing:
-
-- `config.device.add` / `config.device.remove` / `config.device.list` - manage the device registry
-- `config.tag.set` / `config.tag.get` - fleet grouping (see below)
-- `config.heartbeat.set` - adjust heartbeat interval
-- `config.event.set` / `config.event.clear` / `config.event.list` - threshold events (see below)
-- `config.name.set` - rename the node (triggers reboot)
-- `config.get` - dump current config (WiFi password excluded)
-
-Example - provision 10 nodes from one terminal:
+For any register-based I2C device without a dedicated driver:
 
 ```bash
-for i in $(seq 1 10); do
-  node="ionode-$(printf '%02d' $i)"
-  ionode tag "$node" greenhouse
-  ionode device add "$node" temp ntc_10k 2 --unit C
-  ionode device add "$node" fan relay 8 --inverted
-  ionode event set "$node" temp --above 28 --cooldown 30
-done
+ionode device add ionode-01 custom_pres i2c_generic 16 --unit hPa --i2c-addr 80 --reg-len 2 --scale 0.01
 ```
 
-Full protocol: [docs/NATS-API.md](NATS-API.md)
+Reads register `pin` (0-255) from `i2c_addr`, combines bytes big-endian, multiplies by `scale`.
 
 ---
 
-## Tags and Group Discovery
+## SSD1306 OLED Display
 
-Nodes can be tagged for fleet grouping. Set a tag via CLI, web UI, NATS, or `config.json`:
+128x64 and 128x32 OLED displays as actuator devices. Text-only with built-in 5x7 font (21 chars per line).
 
 ```bash
-ionode tag ionode-01 greenhouse
-ionode ls --tag greenhouse
+ionode device add ionode-01 display ssd1306 0 --i2c-addr 60 --template "T:{bme_temp}C H:{bme_humi}%\nP:{bme_pres}hPa"
 ```
 
-Tagged nodes subscribe to `_ion.group.{tag}` and respond with their full capabilities, just like `_ion.discover`. Tags can be changed at runtime without reboot - the group subscription is updated live.
+### Template System
+
+Templates auto-refresh every 5 seconds. `{device_name}` tokens are replaced with live sensor readings:
+
+| Token | Value |
+|-------|-------|
+| `{bme_temp}` | Current value of the `bme_temp` device |
+| `{ip}` | Node IP address |
+| `{heap}` | Free heap in KB |
+| `{uptime}` | Uptime string (e.g. `1d 4h`) |
+| `{name}` | Device name |
+
+Raw text (no interpolation) can be sent via NATS with `!` prefix:
+
+```bash
+ionode write ionode-01 display "!Hello World"
+```
+
+### Display Sizes
+
+- `pin=0` — 128x64 (8 lines x 21 chars)
+- `pin=1` — 128x32 (4 lines x 21 chars)
 
 ---
 
-## Health Heartbeat
+## I2C Bus Access (HAL)
 
-Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60 seconds, configurable 0–3600, 0 disables):
+Raw I2C bus operations via NATS, even without registered devices.
+
+| Subject | Payload | Response |
+|---------|---------|----------|
+| `{name}.hal.i2c.scan` | — | `[60,104,118]` |
+| `{name}.hal.i2c.{addr}.detect` | — | `true` / `false` |
+| `{name}.hal.i2c.{addr}.read` | `{"reg":0,"len":2}` | `[0,255]` |
+| `{name}.hal.i2c.{addr}.write` | `{"reg":0,"data":[1,2]}` | `ok` |
+| `{name}.hal.i2c.recover` | — | `ok` |
+
+Addresses in subjects are decimal (e.g., `i2c.60.detect` for 0x3C).
+
+### CLI
+
+```bash
+ionode i2c ionode-01 scan                    # scan bus, formatted table
+ionode i2c ionode-01 detect 60               # check specific address
+ionode i2c ionode-01 read 118 --reg 0 --len 2  # read register
+ionode i2c ionode-01 write 60 --reg 0 --data 1,2  # write register
+ionode i2c ionode-01 recover                 # bus recovery (9x SCL toggle)
+```
+
+---
+
+## I2C Pin Mapping
+
+Fixed pins per chip variant (same pattern as UART):
+
+| Chip | SDA | SCL |
+|------|-----|-----|
+| ESP32-C6 | 6 | 7 |
+| ESP32-S3 | 8 | 9 |
+| ESP32-C3 | 4 | 6 |
+| Classic ESP32 | 21 | 22 |
+
+Bus is reference-counted: initialized on first I2C device registration, deinitialized when the last I2C device is removed.
+
+---
+
+## Web UI Updates
+
+- **I2C device types** in the Add Device dropdown (i2c_bme280, i2c_bh1750, i2c_sht31, i2c_ads1115, i2c_generic, ssd1306)
+- **I2C form fields** — address, channel, unit, template, generic settings (register, length, scale)
+- **I2C scan** button — scans the bus and shows detected addresses
+- **SSD1306 control card** — text input with send and clear buttons
+- **`/api/i2c/scan`** endpoint — returns detected I2C addresses
+- **`/api/devices/display`** endpoint — send text to SSD1306 displays
+
+---
+
+## Device Registry Changes
+
+### New Device Kinds
+
+| Kind | Type | Description |
+|------|------|-------------|
+| `i2c_generic` | sensor | Raw I2C register read with configurable scale |
+| `i2c_bme280` | sensor | BME280 temperature/humidity/pressure |
+| `i2c_bh1750` | sensor | BH1750 ambient light (lux) |
+| `i2c_sht31` | sensor | SHT31 temperature/humidity |
+| `i2c_ads1115` | sensor | ADS1115 16-bit ADC |
+| `ssd1306` | actuator | SSD1306 OLED text display |
+
+### New Persistence Fields
+
+| JSON Key | Field | Description |
+|----------|-------|-------------|
+| `ia` | `i2c_addr` | I2C slave address (0-127) |
+| `dt` | `disp_template` | Display template string (SSD1306) |
+| `rl` | `i2c_reg_len` | Register read length for i2c_generic (1 or 2) |
+| `sc` | `i2c_scale` | Scale multiplier for i2c_generic |
+
+### NATS device.add Payload
 
 ```json
-{
-  "device": "ionode-01",
-  "tag": "greenhouse",
-  "version": "0.2.0",
-  "uptime": 3600,
-  "heap": 245000,
-  "rssi": -52,
-  "nats_reconnects": 0,
-  "sensors": 4,
-  "actuators": 2,
-  "events_fired": 3
-}
-```
-
-New HAL system queries: `hal.system.rssi`, `hal.system.reset_reason`, `hal.system.nats_reconnects`.
-
-RSSI is also included in the capabilities/discovery response for fast fleet-level signal strength visibility.
-
-Monitor with the CLI:
-
-```bash
-ionode watch --heartbeats
+{"n":"bme_temp","k":"i2c_bme280","p":0,"u":"C","i":false,"ia":118}
+{"n":"display","k":"ssd1306","p":0,"u":"","i":false,"ia":60,"dt":"T:{bme_temp}C"}
+{"n":"custom","k":"i2c_generic","p":16,"u":"hPa","i":false,"ia":80,"rl":2,"sc":0.01}
 ```
 
 ---
 
-## Threshold Events
+## Files Created
 
-Sensors can fire NATS notifications when values cross a threshold. Edge-detected with configurable cooldown - fires once on crossing, re-arms only when the value returns to the safe side.
+| File | Purpose |
+|------|---------|
+| `include/i2c_devices.h` | I2C subsystem header |
+| `src/i2c_devices.cpp` | I2C bus management + BME280/BH1750/SHT31/ADS1115/generic drivers |
+| `src/i2c_display.cpp` | SSD1306 OLED driver + template engine + 5x7 font |
 
-```bash
-ionode event set ionode-01 chip_temp --above 45 --cooldown 30
-ionode watch --events
-```
+## Files Modified
 
-Event payload:
-
-```json
-{
-  "event": "threshold",
-  "device": "ionode-01",
-  "sensor": "chip_temp",
-  "value": 46.2,
-  "threshold": 45.0,
-  "direction": "above",
-  "unit": "C"
-}
-```
-
-Events persist across reboots (stored as flat keys in `devices.json`). Configurable via NATS, CLI, web API (`/api/devices/event`), and visible on sensor cards in the web UI.
-
----
-
-## Other Changes
-
-- **RSSI in capabilities** - `WiFi.RSSI()` added to discovery/capabilities response
-- **Debounced flash writes** - `devices.json` flushes at most every 5s, `config.json` every 2s
-- **NATS reconnect counter** tracked across session
-- **`config.json.example`** updated with `tag` and `heartbeat_interval` fields
-- **Web UI** - tag field in Config tab, extended Status tab with fleet telemetry
-- **Documentation** - restructured into `docs/` with NATS-API contract, CLI reference, and this changelog
+- `include/devices.h` — New enum entries, struct fields, updated function signatures
+- `src/devices.cpp` — I2C device kinds, read/write, init/deinit, persistence
+- `src/nats_hal.cpp` — I2C HAL handler (scan, detect, read, write, recover)
+- `src/nats_config.cpp` — I2C kind mapping, `ia`/`dt`/`rl`/`sc` field parsing
+- `src/web_config.cpp` — I2C device form, scan endpoint, display endpoint
+- `src/main.cpp` — `displayPoll()` in loop, `"i2c":true` in capabilities
+- `cli/ionode` — `i2c` command routing and help
+- `cli/lib/cmd_hardware.sh` — `cmd_i2c` function (scan, detect, read, write, recover)
+- `cli/lib/cmd_config.sh` — `--i2c-addr`, `--channel`, `--template`, `--reg-len`, `--scale` flags
 
 ---
 
 ## Compatibility
 
-All 4 targets build and are tested: ESP32-C6, ESP32-S3, ESP32-C3, classic ESP32. No breaking changes to existing config or device files - new fields are optional and default safely.
+All 4 targets build: ESP32-C6, ESP32-S3, ESP32-C3, classic ESP32. Flash usage well within 2MB budget (~16KB added).
+
+No breaking changes. Existing `devices.json` files work unchanged — persistence uses string kind names, not enum values. New fields default safely (`i2c_addr=0`, `i2c_reg_len=1`, `i2c_scale=1.0`).

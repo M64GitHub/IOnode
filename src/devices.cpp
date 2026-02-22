@@ -5,6 +5,7 @@
 
 #include "devices.h"
 #include "nats_hal.h"
+#include "i2c_devices.h"
 #include <nats_atoms.h>
 #include <LittleFS.h>
 #if !defined(CONFIG_IDF_TARGET_ESP32)
@@ -28,11 +29,16 @@ void devicesMarkDirty() {
  *============================================================================*/
 
 bool deviceIsSensor(DeviceKind kind) {
-    return kind <= DEV_SENSOR_SERIAL_TEXT;
+    return kind <= DEV_SENSOR_I2C_ADS1115;
 }
 
 bool deviceIsActuator(DeviceKind kind) {
     return kind >= DEV_ACTUATOR_DIGITAL;
+}
+
+bool deviceIsI2c(DeviceKind kind) {
+    return (kind >= DEV_SENSOR_I2C_GENERIC && kind <= DEV_SENSOR_I2C_ADS1115) ||
+           kind == DEV_ACTUATOR_SSD1306;
 }
 
 const char *deviceKindName(DeviceKind kind) {
@@ -47,10 +53,16 @@ const char *deviceKindName(DeviceKind kind) {
         case DEV_SENSOR_CLOCK_HHMM:   return "clock_hhmm";
         case DEV_SENSOR_NATS_VALUE:    return "nats_value";
         case DEV_SENSOR_SERIAL_TEXT:   return "serial_text";
+        case DEV_SENSOR_I2C_GENERIC:   return "i2c_generic";
+        case DEV_SENSOR_I2C_BME280:    return "i2c_bme280";
+        case DEV_SENSOR_I2C_BH1750:    return "i2c_bh1750";
+        case DEV_SENSOR_I2C_SHT31:     return "i2c_sht31";
+        case DEV_SENSOR_I2C_ADS1115:   return "i2c_ads1115";
         case DEV_ACTUATOR_DIGITAL:     return "digital_out";
         case DEV_ACTUATOR_RELAY:       return "relay";
         case DEV_ACTUATOR_PWM:         return "pwm";
         case DEV_ACTUATOR_RGB_LED:     return "rgb_led";
+        case DEV_ACTUATOR_SSD1306:     return "ssd1306";
         default:                       return "unknown";
     }
 }
@@ -66,10 +78,16 @@ static DeviceKind kindFromString(const char *s) {
     if (strcmp(s, "clock_hhmm") == 0)   return DEV_SENSOR_CLOCK_HHMM;
     if (strcmp(s, "nats_value") == 0)    return DEV_SENSOR_NATS_VALUE;
     if (strcmp(s, "serial_text") == 0)   return DEV_SENSOR_SERIAL_TEXT;
+    if (strcmp(s, "i2c_generic") == 0)   return DEV_SENSOR_I2C_GENERIC;
+    if (strcmp(s, "i2c_bme280") == 0)    return DEV_SENSOR_I2C_BME280;
+    if (strcmp(s, "i2c_bh1750") == 0)    return DEV_SENSOR_I2C_BH1750;
+    if (strcmp(s, "i2c_sht31") == 0)     return DEV_SENSOR_I2C_SHT31;
+    if (strcmp(s, "i2c_ads1115") == 0)   return DEV_SENSOR_I2C_ADS1115;
     if (strcmp(s, "digital_out") == 0)   return DEV_ACTUATOR_DIGITAL;
     if (strcmp(s, "relay") == 0)         return DEV_ACTUATOR_RELAY;
     if (strcmp(s, "pwm") == 0)           return DEV_ACTUATOR_PWM;
     if (strcmp(s, "rgb_led") == 0)      return DEV_ACTUATOR_RGB_LED;
+    if (strcmp(s, "ssd1306") == 0)      return DEV_ACTUATOR_SSD1306;
     return DEV_SENSOR_DIGITAL;
 }
 
@@ -95,7 +113,9 @@ Device *deviceFind(const char *name) {
 
 bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
                     const char *unit, bool inverted,
-                    const char *nats_subject, uint32_t baud) {
+                    const char *nats_subject, uint32_t baud,
+                    uint8_t i2c_addr, const char *disp_template,
+                    uint8_t i2c_reg_len, float i2c_scale) {
     /* Reject HAL reserved names */
     if (halIsReservedName(name)) return false;
 
@@ -130,13 +150,34 @@ bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
             g_devices[i].nats_sid = 0;
             g_devices[i].baud = baud;
 
+            /* I2C fields */
+            g_devices[i].i2c_addr = i2c_addr;
+            g_devices[i].i2c_reg_len = i2c_reg_len > 0 ? i2c_reg_len : 1;
+            g_devices[i].i2c_scale = (i2c_scale != 0.0f) ? i2c_scale : 1.0f;
+            if (disp_template && disp_template[0]) {
+                strncpy(g_devices[i].disp_template, disp_template, sizeof(g_devices[i].disp_template) - 1);
+                g_devices[i].disp_template[sizeof(g_devices[i].disp_template) - 1] = '\0';
+            } else {
+                g_devices[i].disp_template[0] = '\0';
+            }
+
             /* Initialize serial_text UART */
             if (kind == DEV_SENSOR_SERIAL_TEXT) {
                 serialTextInit(baud);
             }
 
-            /* Configure GPIO for actuators */
-            if (deviceIsActuator(kind) && pin != PIN_NONE) {
+            /* Initialize I2C bus for I2C devices */
+            if (deviceIsI2c(kind) && i2c_addr > 0) {
+                i2cInit();
+                /* Initialize SSD1306 display */
+                if (kind == DEV_ACTUATOR_SSD1306) {
+                    uint8_t height = (pin == 1) ? 32 : 64;
+                    ssd1306Init(i2c_addr, height);
+                }
+            }
+
+            /* Configure GPIO for non-I2C actuators */
+            if (deviceIsActuator(kind) && !deviceIsI2c(kind) && pin != PIN_NONE) {
                 pinMode(pin, OUTPUT);
             }
 
@@ -151,6 +192,13 @@ bool deviceRemove(const char *name) {
     if (!dev) return false;
     if (dev->kind == DEV_SENSOR_SERIAL_TEXT) {
         serialTextDeinit();
+    }
+    if (deviceIsI2c(dev->kind) && dev->i2c_addr > 0) {
+        if (dev->kind == DEV_ACTUATOR_SSD1306) {
+            ssd1306Deinit(dev->i2c_addr);
+        }
+        i2cCacheInvalidate(dev->i2c_addr);
+        i2cDeinit();
     }
     dev->used = false;
     dev->name[0] = '\0';
@@ -209,7 +257,8 @@ float deviceReadSensor(Device *dev, bool record_hist) {
             int32_t sum = 0;
             for (int s = 0; s < 16; s++) sum += analogReadMilliVolts(dev->pin);
             float mV = sum / 16.0f;
-            result = mV * 100.0f / 3300.0f;
+            float pct = mV * 100.0f / 3300.0f;
+            result = dev->inverted ? (100.0f - pct) : pct;
             record_history = true;
             break;
         }
@@ -253,6 +302,32 @@ float deviceReadSensor(Device *dev, bool record_hist) {
             record_history = true;
             break;
 
+        case DEV_SENSOR_I2C_GENERIC:
+            result = i2cGenericRead(dev->i2c_addr, dev->pin,
+                                    dev->i2c_reg_len, dev->i2c_scale);
+            record_history = true;
+            break;
+
+        case DEV_SENSOR_I2C_BME280:
+            result = i2cBme280Read(dev->i2c_addr, dev->pin);
+            record_history = true;
+            break;
+
+        case DEV_SENSOR_I2C_BH1750:
+            result = i2cBh1750Read(dev->i2c_addr);
+            record_history = true;
+            break;
+
+        case DEV_SENSOR_I2C_SHT31:
+            result = i2cSht31Read(dev->i2c_addr, dev->pin);
+            record_history = true;
+            break;
+
+        case DEV_SENSOR_I2C_ADS1115:
+            result = i2cAds1115Read(dev->i2c_addr, dev->pin);
+            record_history = true;
+            break;
+
         default:
             break;
     }
@@ -272,7 +347,8 @@ float deviceReadSensor(Device *dev, bool record_hist) {
 
 bool deviceSetActuator(Device *dev, int value) {
     if (!dev || !dev->used || !deviceIsActuator(dev->kind)) return false;
-    if (dev->pin == PIN_NONE) return false;
+    /* SSD1306 has no GPIO pin — allow PIN_NONE for I2C actuators */
+    if (dev->pin == PIN_NONE && !deviceIsI2c(dev->kind)) return false;
 
     int prev = dev->last_value;
     dev->last_value = value;
@@ -307,6 +383,16 @@ bool deviceSetActuator(Device *dev, int value) {
                         (uint8_t)((value >> 16) & 0xFF),
                         (uint8_t)((value >> 8) & 0xFF),
                         (uint8_t)(value & 0xFF));
+            return true;
+
+        case DEV_ACTUATOR_SSD1306:
+            /* value=0 clears display, value=1 refreshes template */
+            if (value == 0) {
+                ssd1306Clear(dev->i2c_addr);
+            } else if (dev->disp_template[0]) {
+                uint8_t height = (dev->pin == 1) ? 32 : 64;
+                ssd1306RenderTemplate(dev->i2c_addr, dev->disp_template, height);
+            }
             return true;
 
         default:
@@ -485,6 +571,36 @@ void devicesSave() {
             w += snprintf(buf + w, sizeof(buf) - w,
                 ",\"bd\":%u", (unsigned)d->baud);
         }
+        if (d->i2c_addr > 0) {
+            w += snprintf(buf + w, sizeof(buf) - w,
+                ",\"ia\":%d", d->i2c_addr);
+        }
+        if (d->disp_template[0]) {
+            /* JSON-escape the template (may contain quotes, backslashes) */
+            char esc_tmpl[256];
+            int ew = 0;
+            for (int j = 0; d->disp_template[j] && ew < (int)sizeof(esc_tmpl) - 2; j++) {
+                char c = d->disp_template[j];
+                if (c == '"' || c == '\\') {
+                    esc_tmpl[ew++] = '\\'; esc_tmpl[ew++] = c;
+                } else if (c == '\n') {
+                    esc_tmpl[ew++] = '\\'; esc_tmpl[ew++] = 'n';
+                } else if ((uint8_t)c >= 0x20) {
+                    esc_tmpl[ew++] = c;
+                }
+            }
+            esc_tmpl[ew] = '\0';
+            w += snprintf(buf + w, sizeof(buf) - w,
+                ",\"dt\":\"%s\"", esc_tmpl);
+        }
+        if (d->kind == DEV_SENSOR_I2C_GENERIC) {
+            w += snprintf(buf + w, sizeof(buf) - w,
+                ",\"rl\":%d", d->i2c_reg_len);
+            if (d->i2c_scale != 1.0f) {
+                w += snprintf(buf + w, sizeof(buf) - w,
+                    ",\"sc\":%.6g", d->i2c_scale);
+            }
+        }
         /* Persist last value for relay/digital_out (safe to restore on boot) */
         if ((d->kind == DEV_ACTUATOR_RELAY || d->kind == DEV_ACTUATOR_DIGITAL)
             && d->last_value != 0) {
@@ -560,9 +676,18 @@ static void devicesLoad() {
         devJsonGetString(objBuf, "ns", nats_subj, sizeof(nats_subj));
         uint32_t baud = (uint32_t)devJsonGetInt(objBuf, "bd", 0);
 
+        /* I2C fields */
+        uint8_t i2c_addr = (uint8_t)devJsonGetInt(objBuf, "ia", 0);
+        char disp_tmpl[128] = "";
+        devJsonGetString(objBuf, "dt", disp_tmpl, sizeof(disp_tmpl));
+        uint8_t i2c_reg_len = (uint8_t)devJsonGetInt(objBuf, "rl", 1);
+        float i2c_scale = devJsonGetFloat(objBuf, "sc", 1.0f);
+
         DeviceKind kind = kindFromString(kind_str);
         deviceRegister(name, kind, (uint8_t)pin, unit, inverted,
-                       nats_subj[0] ? nats_subj : nullptr, baud);
+                       nats_subj[0] ? nats_subj : nullptr, baud,
+                       i2c_addr, disp_tmpl[0] ? disp_tmpl : nullptr,
+                       i2c_reg_len, i2c_scale);
 
         /* Restore persisted actuator value for relay/digital_out */
         if (kind == DEV_ACTUATOR_RELAY || kind == DEV_ACTUATOR_DIGITAL) {
@@ -603,6 +728,15 @@ static void devicesLoad() {
 void devicesClear() {
     /* Deinit serial_text if active */
     if (serialTextActive()) serialTextDeinit();
+    /* Deinit SSD1306 displays and I2C bus */
+    for (int i = 0; i < MAX_DEVICES; i++) {
+        if (g_devices[i].used && deviceIsI2c(g_devices[i].kind) && g_devices[i].i2c_addr > 0) {
+            if (g_devices[i].kind == DEV_ACTUATOR_SSD1306) {
+                ssd1306Deinit(g_devices[i].i2c_addr);
+            }
+            i2cDeinit();
+        }
+    }
     memset(g_devices, 0, sizeof(g_devices));
 }
 

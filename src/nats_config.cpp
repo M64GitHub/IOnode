@@ -175,13 +175,28 @@ static void cfgDeviceAdd(nats_client_t *client, const nats_msg_t *msg,
     else if (strcmp(kind_str, "relay") == 0)      kind = DEV_ACTUATOR_RELAY;
     else if (strcmp(kind_str, "pwm") == 0)        kind = DEV_ACTUATOR_PWM;
     else if (strcmp(kind_str, "rgb_led") == 0)    kind = DEV_ACTUATOR_RGB_LED;
+    else if (strcmp(kind_str, "i2c_generic") == 0) kind = DEV_SENSOR_I2C_GENERIC;
+    else if (strcmp(kind_str, "i2c_bme280") == 0)  kind = DEV_SENSOR_I2C_BME280;
+    else if (strcmp(kind_str, "i2c_bh1750") == 0)  kind = DEV_SENSOR_I2C_BH1750;
+    else if (strcmp(kind_str, "i2c_sht31") == 0)   kind = DEV_SENSOR_I2C_SHT31;
+    else if (strcmp(kind_str, "i2c_ads1115") == 0)  kind = DEV_SENSOR_I2C_ADS1115;
+    else if (strcmp(kind_str, "ssd1306") == 0)     kind = DEV_ACTUATOR_SSD1306;
     else {
         cfgError(client, msg, "unknown_kind", kind_str);
         return;
     }
 
+    /* I2C fields */
+    uint8_t i2c_addr = (uint8_t)cfgJsonGetInt(payload, "ia", 0);
+    char disp_tmpl[128] = "";
+    cfgJsonGetString(payload, "dt", disp_tmpl, sizeof(disp_tmpl));
+    uint8_t i2c_reg_len = (uint8_t)cfgJsonGetInt(payload, "rl", 1);
+    float i2c_scale = cfgJsonGetFloat(payload, "sc", 1.0f);
+
     bool ok = deviceRegister(name, kind, (uint8_t)pin, unit[0] ? unit : nullptr,
-                        inverted, nats_subj[0] ? nats_subj : nullptr, baud);
+                        inverted, nats_subj[0] ? nats_subj : nullptr, baud,
+                        i2c_addr, disp_tmpl[0] ? disp_tmpl : nullptr,
+                        i2c_reg_len, i2c_scale);
     if (!ok) {
         cfgError(client, msg, "register_failed", "duplicate name or registry full");
         return;

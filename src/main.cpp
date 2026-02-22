@@ -18,6 +18,7 @@
 #endif
 #include "devices.h"
 #include "nats_hal.h"
+#include "i2c_devices.h"
 #include "nats_config.h"
 #include "setup_portal.h"
 #include "web_config.h"
@@ -359,7 +360,7 @@ static void onNatsCapabilities(nats_client_t *client, const nats_msg_t *msg,
     /* HAL capabilities */
     w += snprintf(g_caps_json + w, sizeof(g_caps_json) - w,
         "\"hal\":{\"gpio\":true,\"adc\":true,\"pwm\":true,"
-        "\"dac\":false,\"uart\":true,\"system_temp\":true},");
+        "\"dac\":false,\"uart\":true,\"i2c\":true,\"system_temp\":true},");
 
     /* Devices */
     w += snprintf(g_caps_json + w, sizeof(g_caps_json) - w, "\"devices\":[");
@@ -815,6 +816,9 @@ void loop() {
 
     /* Keep sensor EMA values warm (every 10s) + history (every 5min) */
     sensorsPoll();
+
+    /* Refresh SSD1306 display templates (every 5s) */
+    displayPoll();
 
     /* Check event thresholds every 1 second */
     {

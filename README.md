@@ -1,6 +1,6 @@
 # IOnode
 
-![Version](https://img.shields.io/badge/firmware-v0.2.0-ff8c00) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-ESP32-333)
+![Version](https://img.shields.io/badge/firmware-v0.3.0-ff8c00) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-ESP32-333)
 
 **Flash any ESP32. It speaks NATS.**  |  [ionode.io](https://ionode.io) | [Flash from browser](https://ionode.io/flash.html)
 
@@ -35,7 +35,7 @@ Your laptop / server / Raspberry Pi
 - [OpenClaw Integration](#openclaw-integration) - natural language control
 - [Integrations](#integrations) - scripts, Node-RED, Home Assistant, anything
 
-**Documentation:** [`docs/`](docs/) - [Setup Guide](docs/SETUP.md) · [CLI Reference](docs/CLI.md) · [Release Notes](docs/RELEASE-NOTES.md)
+**Documentation:** [`docs/`](docs/) - [Setup Guide](docs/SETUP.md) · [CLI Reference](docs/CLI.md) · [GPIO & Actuators](docs/GPIO.md) · [Standard Sensors](docs/IOnode-Standard-Sensors.md) · [I2C Sensors](docs/I2C-Sensors.md) · [I2C Display](docs/I2C-Display.md) · [Release Notes](docs/RELEASE-NOTES.md)
 
 ---
 
@@ -205,7 +205,7 @@ Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s, c
 
 ```json
 {
-  "device": "ionode-01", "tag": "greenhouse", "version": "0.2.0",
+  "device": "ionode-01", "tag": "greenhouse", "version": "0.2.1",
   "uptime": 3600, "heap": 245000, "rssi": -52,
   "nats_reconnects": 0, "sensors": 4, "actuators": 2, "events_fired": 3
 }
@@ -257,6 +257,10 @@ Full protocol specification with payload formats and error handling: [`docs/NATS
 | `{name}.hal.pwm.{pin}.get` | - | `0`-`255` | Last written PWM value (cached) |
 | `{name}.hal.uart.read` | - | last line | Requires a `serial_text` device |
 | `{name}.hal.uart.write` | text | `ok` | Requires a `serial_text` device |
+| `{name}.hal.i2c.scan` | - | `[60,118]` | Detected I2C addresses |
+| `{name}.hal.i2c.{addr}.detect` | - | `true`/`false` | Addresses in decimal |
+| `{name}.hal.i2c.{addr}.read` | `{"reg":N,"len":N}` | `[bytes]` | Read I2C register |
+| `{name}.hal.i2c.{addr}.write` | `{"reg":N,"data":[...]}` | `ok` | Write I2C register |
 | `{name}.hal.system.temperature` | - | `38.1` | Chip temp in °C |
 | `{name}.hal.system.heap` | - | `156000` | Free heap bytes |
 | `{name}.hal.system.uptime` | - | `3600` | Seconds since boot |
@@ -318,6 +322,11 @@ Full protocol specification with payload formats and error handling: [`docs/NATS
 | `clock_hhmm` | HHMM format (e.g. 1430 = 2:30 PM) |
 | `nats_value` | Subscribes to a NATS subject, stores last value |
 | `serial_text` | Reads lines from UART1, parses numeric value |
+| `i2c_generic` | Raw I2C register read, configurable addr/reg/len/scale |
+| `i2c_bme280` | BME280 temp/humidity/pressure, channel via pin 0/1/2 |
+| `i2c_bh1750` | BH1750 ambient light (lux) |
+| `i2c_sht31` | SHT31 temp/humidity, channel via pin 0/1 |
+| `i2c_ads1115` | ADS1115 16-bit ADC, channel via pin 0-3 |
 
 ### Actuators
 
@@ -325,8 +334,9 @@ Full protocol specification with payload formats and error handling: [`docs/NATS
 |------|--------------|
 | `digital_out` | `digitalWrite(pin, val)` |
 | `relay` | `digitalWrite` with optional inversion |
-| `pwm` | `analogWrite(pin, 0–255)` |
+| `pwm` | `analogWrite(pin, 0-255)` |
 | `rgb_led` | Built-in RGB LED, packed `0xRRGGBB` value |
+| `ssd1306` | SSD1306 OLED text display, template-driven |
 
 ### Registering Devices
 
@@ -526,6 +536,7 @@ IOnode/
 ├── include/
 │   ├── version.h              IONODE_VERSION
 │   ├── devices.h              Device registry structs & API
+│   ├── i2c_devices.h          I2C subsystem header (pins, cache, drivers, display)
 │   ├── nats_hal.h             HAL NATS handler
 │   ├── nats_config.h          Remote config NATS handler
 │   ├── web_config.h           Web UI server
@@ -533,7 +544,9 @@ IOnode/
 ├── src/
 │   ├── main.cpp               Setup, loop, NATS, serial commands
 │   ├── devices.cpp            Registry, sensor reading, persistence, events
-│   ├── nats_hal.cpp           HAL request router (gpio/adc/pwm/uart/system)
+│   ├── i2c_devices.cpp        I2C bus management + sensor drivers (BME280, BH1750, SHT31, ADS1115)
+│   ├── i2c_display.cpp        SSD1306 OLED driver + template engine + 5x7 font
+│   ├── nats_hal.cpp           HAL request router (gpio/adc/pwm/uart/i2c/system)
 │   ├── nats_config.cpp        Remote config router (config.> subjects)
 │   ├── web_config.cpp         Web UI server + REST API
 │   └── setup_portal.cpp       WiFi AP + captive portal

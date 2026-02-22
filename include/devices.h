@@ -28,11 +28,18 @@ enum DeviceKind {
     DEV_SENSOR_CLOCK_HHMM,     /* getLocalTime() -> hour*100+minute (e.g. 1830) */
     DEV_SENSOR_NATS_VALUE,     /* value received from NATS subject */
     DEV_SENSOR_SERIAL_TEXT,    /* text received from UART serial port */
+    /* I2C sensors */
+    DEV_SENSOR_I2C_GENERIC,    /* raw I2C register read: configurable addr/reg/len */
+    DEV_SENSOR_I2C_BME280,     /* BME280: temp/humidity/pressure, channel via pin 0/1/2 */
+    DEV_SENSOR_I2C_BH1750,     /* BH1750: ambient light lux */
+    DEV_SENSOR_I2C_SHT31,      /* SHT31: temp/humidity, channel via pin 0/1 */
+    DEV_SENSOR_I2C_ADS1115,    /* ADS1115: 16-bit ADC, channel via pin 0-3 */
     /* Actuators */
     DEV_ACTUATOR_DIGITAL,       /* digitalWrite */
     DEV_ACTUATOR_RELAY,         /* digitalWrite (inverted flag) */
     DEV_ACTUATOR_PWM,           /* analogWrite 0-255 */
     DEV_ACTUATOR_RGB_LED,       /* rgbLedWrite packed 0xRRGGBB */
+    DEV_ACTUATOR_SSD1306,       /* SSD1306 OLED display (text via template) */
 };
 
 struct Device {
@@ -49,6 +56,11 @@ struct Device {
     uint16_t    nats_sid;
     /* Serial text baud rate (only meaningful for DEV_SENSOR_SERIAL_TEXT) */
     uint32_t    baud;
+    /* I2C fields */
+    uint8_t     i2c_addr;           /* I2C slave address (0 = not I2C) */
+    char        disp_template[128]; /* display template for SSD1306 actuators */
+    uint8_t     i2c_reg_len;        /* i2c_generic: bytes to read (1 or 2) */
+    float       i2c_scale;          /* i2c_generic: scale multiplier */
     /* Last value set on actuator (for display; not persisted, resets on boot) */
     int         last_value;
     /* EMA-smoothed sensor value (runtime only, not persisted) */
@@ -95,7 +107,11 @@ void devicesReload();
 bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
                     const char *unit, bool inverted,
                     const char *nats_subject = nullptr,
-                    uint32_t baud = 0);
+                    uint32_t baud = 0,
+                    uint8_t i2c_addr = 0,
+                    const char *disp_template = nullptr,
+                    uint8_t i2c_reg_len = 1,
+                    float i2c_scale = 1.0f);
 
 /* Remove a device by name. Returns true if found and removed. */
 bool deviceRemove(const char *name);
@@ -161,6 +177,9 @@ bool serialTextActive();
 
 /* Returns true if the rgb_led device is set to a non-zero color (suppresses heartbeat) */
 bool rgbLedOverride();
+
+/* Check if a DeviceKind is an I2C sensor type */
+bool deviceIsI2c(DeviceKind kind);
 
 /* Check all sensor events and fire NATS notifications on threshold crossing */
 void eventsCheck();

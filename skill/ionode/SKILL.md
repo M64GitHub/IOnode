@@ -24,7 +24,7 @@ ADC channel, sensor, and actuator becomes reachable via request/reply over NATS.
 
 - **Website & docs:** https://ionode.io
 - **GitHub:** https://github.com/M64GitHub/IOnode
-- **Firmware version:** 0.2.0
+- **Firmware version:** 0.3.0
 
 ## Prerequisites
 
@@ -216,6 +216,11 @@ ionode read ionode-01 light                 # → 67.2
 | `clock_hhmm` | HHMM format (e.g. 1430) |
 | `nats_value` | Subscribes to a NATS subject, stores last value |
 | `serial_text` | Reads lines from UART1, parses numeric value |
+| `i2c_generic` | Raw I2C register read, configurable addr/reg/len/scale |
+| `i2c_bme280` | BME280 temp/humidity/pressure, channel via pin 0/1/2 |
+| `i2c_bh1750` | BH1750 ambient light (lux) |
+| `i2c_sht31` | SHT31 temp/humidity, channel via pin 0/1 |
+| `i2c_ads1115` | ADS1115 16-bit ADC, channel via pin 0-3 |
 
 **Actuators:**
 
@@ -223,8 +228,9 @@ ionode read ionode-01 light                 # → 67.2
 |------|-------|
 | `digital_out` | digitalWrite |
 | `relay` | digitalWrite with optional inversion |
-| `pwm` | analogWrite 0–255 |
+| `pwm` | analogWrite 0-255 |
 | `rgb_led` | Built-in RGB LED, packed 0xRRGGBB value |
+| `ssd1306` | SSD1306 OLED text display, template-driven |
 
 ### Pre-registered Devices (always available)
 - `chip_temp` - internal chip temperature in °C
@@ -390,10 +396,35 @@ loop), use the WireClaw skill instead.
 
 ---
 
+## I2C Bus Access
+
+```bash
+ionode i2c <device> scan                       # scan I2C bus
+ionode i2c <device> detect <addr>              # check if device exists
+ionode i2c <device> read <addr> --reg N --len N  # read register
+ionode i2c <device> write <addr> --reg N --data N,N  # write register
+ionode i2c <device> recover                    # bus recovery
+```
+
+### I2C Sensors & Display
+
+```bash
+# BME280 - 3 channels: temp (pin=0), humidity (pin=1), pressure (pin=2)
+ionode device add <dev> bme_temp i2c_bme280 --channel 0 --unit C --i2c-addr 118
+ionode device add <dev> bme_humi i2c_bme280 --channel 1 --unit % --i2c-addr 118
+
+# BH1750 light sensor
+ionode device add <dev> light i2c_bh1750 --unit lux --i2c-addr 35
+
+# SSD1306 OLED display
+ionode device add <dev> display ssd1306 0 --i2c-addr 60 --template "T:{bme_temp}C H:{bme_humi}%"
+ionode write <dev> display "!Hello World"       # raw text (! prefix)
+```
+
 ## Reserved HAL Keywords
 
 Users cannot name their devices any of these words:
-`gpio`, `adc`, `pwm`, `dac`, `uart`, `system`, `device`, `config`
+`gpio`, `adc`, `pwm`, `dac`, `uart`, `i2c`, `system`, `device`, `config`
 
 ## Notes
 

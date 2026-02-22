@@ -252,6 +252,38 @@ $ ionode uart ionode-01 write "AT+RST"
 
 **NATS:** `{name}.hal.uart.read` / `{name}.hal.uart.write`
 
+### `ionode i2c <device> <subcommand> [options]`
+
+Raw I2C bus access. Subcommands: `scan`, `detect`, `read`, `write`, `recover`.
+
+```
+$ ionode i2c ionode-01 scan
+
+━━ I2C Scan  ·  ionode-01
+
+  ADDR    HEX      COMMON DEVICE
+────────────────────────────────────────
+  60      0x3C     SSD1306 OLED
+  104     0x68     DS3231 / MPU6050
+  118     0x76     BME280
+
+  3 device(s) found
+
+$ ionode i2c ionode-01 detect 118
+  I2C 118 (0x76)  found
+
+$ ionode i2c ionode-01 read 118 --reg 0xD0 --len 1
+  I2C 118 (0x76)  reg 0xD0  →  [96]
+
+$ ionode i2c ionode-01 write 60 --reg 0 --data 0xAE
+  I2C 60 (0x3C)  reg 0x00  ← [174]  ok
+
+$ ionode i2c ionode-01 recover
+  I2C bus recovery  ok
+```
+
+**NATS:** `{name}.hal.i2c.scan` / `{name}.hal.i2c.{addr}.detect` / `{name}.hal.i2c.{addr}.read` / `{name}.hal.i2c.{addr}.write` / `{name}.hal.i2c.recover`
+
 ### `ionode devices <device>`
 
 List all registered devices with current values.
@@ -335,15 +367,20 @@ $ ionode rename ionode-01 greenhouse-01
 
 **NATS:** `{name}.config.name.set`
 
-### `ionode device add <device> <name> <kind> <pin> [options]`
+### `ionode device add <device> <name> <kind> [pin] [options]`
 
-Register a new sensor or actuator on the node.
+Register a new sensor or actuator on the node. Pin is optional for I2C devices (defaults to 255).
 
 Options:
 - `--unit <U>` - unit string (e.g. `C`, `%`, `ppm`)
 - `--inverted` - invert digital logic
 - `--baud <N>` - baud rate (for `serial_text` kind)
 - `--nats <subject>` - NATS subject (for `nats_value` kind)
+- `--i2c-addr <A>` - I2C slave address (decimal, for I2C kinds)
+- `--channel <C>` - channel selector (sets pin; for multi-value I2C sensors)
+- `--template <T>` - display template (for `ssd1306` kind)
+- `--reg-len <N>` - register read length, 1 or 2 (for `i2c_generic`)
+- `--scale <F>` - scale multiplier (for `i2c_generic`)
 
 ```
 $ ionode device add ionode-01 temp ntc_10k 2 --unit C
@@ -351,6 +388,12 @@ $ ionode device add ionode-01 temp ntc_10k 2 --unit C
 
 $ ionode device add ionode-01 fan relay 8 --inverted
   +  fan  relay  pin 8
+
+$ ionode device add ionode-01 bme_temp i2c_bme280 --channel 0 --unit C --i2c-addr 118
+  +  bme_temp  i2c_bme280  I2C 0x76 ch0
+
+$ ionode device add ionode-01 display ssd1306 0 --i2c-addr 60 --template "T:{bme_temp}C"
+  +  display  ssd1306  I2C 0x3C
 ```
 
 **NATS:** `{name}.config.device.add`
@@ -487,6 +530,7 @@ Every CLI command maps to one or more NATS operations. See [NATS-API.md](NATS-AP
 | `adc` | `{name}.hal.adc.{pin}.read` |
 | `pwm get/set` | `{name}.hal.pwm.{pin}.get/set` |
 | `uart read/write` | `{name}.hal.uart.read/write` |
+| `i2c scan/detect/read/write/recover` | `{name}.hal.i2c.*` |
 | `devices` | `{name}.hal.device.list` |
 | `config` | `{name}.config.get` |
 | `tag` | `{name}.config.tag.get/set` |
