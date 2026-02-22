@@ -124,14 +124,11 @@ All device types, wiring options, and configuration details are described in the
 | Document | Description |
 |----------|-------------|
 | [Setup Guide](docs/SETUP.md) | NATS server installation, CLI setup, dashboard, network architecture |
-| [CLI Reference](docs/CLI.md) | All commands with examples, global options, NATS subject mapping |
-| [NATS API Reference](docs/NATS-API.md) | Complete protocol contract - every subject, payload, and response |
 | [GPIO & Actuators](docs/GPIO.md) | Digital I/O, relays, PWM, RGB LEDs - wiring, registration, persistence |
 | [Standard Sensors](docs/IOnode-Standard-Sensors.md) | NTC thermistors, LDR light sensors, internal temperature - wiring and calibration |
 | [I2C Sensors](docs/I2C-Sensors.md) | BME280, BH1750, SHT31, ADS1115, generic I2C - pin maps, multi-channel setup |
 | [I2C Display](docs/I2C-Display.md) | SSD1306 OLED - template engine, token reference, raw text mode |
-| [Release Notes](docs/RELEASE-NOTES.md) | Current release changelog |
-| [Release History](docs/RELEASE-HISTORY.md) | All past release notes |
+| [CLI Reference](docs/CLI.md) | All commands with examples, global options, NATS subject mapping |
 
 ---
 
