@@ -299,10 +299,10 @@ For I2C sensors that don't have a dedicated driver, the `i2c_generic` kind lets 
 
 ### How It Works
 
-- **`--i2c-addr`** — the sensor's I2C address (decimal)
-- **pin** — the register address to read (0-255)
-- **`--reg-len`** — how many bytes to read: 1 or 2 (default: 1)
-- **`--scale`** — multiply the raw value by this number (default: 1.0)
+- **`--i2c-addr`** - the sensor's I2C address (decimal)
+- **pin** - the register address to read (0-255)
+- **`--reg-len`** - how many bytes to read: 1 or 2 (default: 1)
+- **`--scale`** - multiply the raw value by this number (default: 1.0)
 
 IOnode reads the register, combines the bytes as a big-endian unsigned integer, and multiplies by the scale factor.
 
@@ -371,10 +371,10 @@ All default addresses are unique, so you can connect one of each without any con
 Need two BME280s? Set the ADDR pin differently on each module:
 
 ```bash
-# First BME280 — SDO pin to GND → address 0x76
+# First BME280 - SDO pin to GND → address 0x76
 ionode device add ionode-01 indoor_temp i2c_bme280 --channel 0 --unit C --i2c-addr 118
 
-# Second BME280 — SDO pin to VCC → address 0x77
+# Second BME280 - SDO pin to VCC → address 0x77
 ionode device add ionode-01 outdoor_temp i2c_bme280 --channel 0 --unit C --i2c-addr 119
 ```
 
@@ -471,7 +471,7 @@ I2C sensors show up in the device list and display live readings just like any o
 
 ## See Also
 
-- [I2C Display Guide](I2C-Display.md) — SSD1306 OLED display setup and templates
-- [CLI Reference](CLI.md) — All CLI commands including `ionode i2c` and `ionode device add`
-- [NATS API Reference](NATS-API.md) — I2C HAL subjects and device.add payload format
-- [Release Notes](RELEASE-NOTES.md) — v0.3.0 I2C feature details
+- [I2C Display Guide](I2C-Display.md) - SSD1306 OLED display setup and templates
+- [CLI Reference](CLI.md) - All CLI commands including `ionode i2c` and `ionode device add`
+- [NATS API Reference](NATS-API.md) - I2C HAL subjects and device.add payload format
+- [Release Notes](RELEASE-NOTES.md) - v0.3.0 I2C feature details

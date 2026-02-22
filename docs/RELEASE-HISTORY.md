@@ -6,7 +6,7 @@ The `inverted` flag, previously only available for relay devices, is now support
 
 **Web UI:** The "Inverted" checkbox in the Add Device form now appears for `relay`, `ntc_10k`, and `ldr` device kinds. Previously it was only shown for relays.
 
-**Backend:** The LDR sensor reading now respects the `inverted` flag. When inverted, the percentage is flipped (`100% - value`), accounting for LDRs wired on the opposite side of the divider. NTC already supported this in the backend via the resistance calculation formula — this release exposes it in the web UI.
+**Backend:** The LDR sensor reading now respects the `inverted` flag. When inverted, the percentage is flipped (`100% - value`), accounting for LDRs wired on the opposite side of the divider. NTC already supported this in the backend via the resistance calculation formula - this release exposes it in the web UI.
 
 **No changes needed for existing devices.** The `inverted` flag defaults to `false`, so all current NTC and LDR devices behave exactly as before.
 

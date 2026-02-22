@@ -1,6 +1,6 @@
 # GPIO, ADC, PWM, Relays, and Digital I/O
 
-IOnode exposes every GPIO pin over NATS. No device registration needed for raw access — just point at a pin and read or write it. For persistent, named devices (relay, PWM output, digital input), register them and get history, events, web UI controls, and state persistence for free.
+IOnode exposes every GPIO pin over NATS. No device registration needed for raw access - just point at a pin and read or write it. For persistent, named devices (relay, PWM output, digital input), register them and get history, events, web UI controls, and state persistence for free.
 
 This guide covers raw hardware access and registered devices for digital I/O, analog input, PWM output, relays, and RGB LEDs.
 
@@ -10,7 +10,7 @@ This guide covers raw hardware access and registered devices for digital I/O, an
 
 - An ESP32 board running IOnode (any supported chip)
 - The `ionode` CLI installed ([setup guide](SETUP.md))
-- Components to connect (LEDs, buttons, relays, motors — whatever you're building)
+- Components to connect (LEDs, buttons, relays, motors - whatever you're building)
 
 > **Important:** ESP32 GPIOs are **3.3V**. Do not connect 5V signals directly to any pin. Use a level shifter or voltage divider if interfacing with 5V logic.
 
@@ -18,7 +18,7 @@ This guide covers raw hardware access and registered devices for digital I/O, an
 
 ## Raw GPIO (No Registration Needed)
 
-The fastest way to interact with hardware. Zero setup — every GPIO pin is accessible immediately.
+The fastest way to interact with hardware. Zero setup - every GPIO pin is accessible immediately.
 
 ### Read a pin
 
@@ -66,7 +66,7 @@ ionode adc ionode-01 2
   ADC 2  1847  ████████░░░░░░░░░░░░  45%
 ```
 
-The CLI shows a bar graph and percentage automatically. Which pins support ADC depends on your chip — most GPIOs with analog capability work. Check your ESP32 variant's datasheet for ADC-capable pins.
+The CLI shows a bar graph and percentage automatically. Which pins support ADC depends on your chip - most GPIOs with analog capability work. Check your ESP32 variant's datasheet for ADC-capable pins.
 
 ### Example: Read a Potentiometer
 
@@ -84,7 +84,7 @@ GND ──┘
 ionode adc ionode-01 2
 ```
 
-Turn the pot and read again — the value changes from 0 (GND) to 4095 (3.3V).
+Turn the pot and read again - the value changes from 0 (GND) to 4095 (3.3V).
 
 ### Raw NATS
 
@@ -253,7 +253,7 @@ GND   ──────────────  GND
 GPIO 16 ────────────  IN (signal)
 ```
 
-Most relay modules are **active-low** — the relay closes when the signal pin goes LOW. Use `--inverted` to match this behavior.
+Most relay modules are **active-low** - the relay closes when the signal pin goes LOW. Use `--inverted` to match this behavior.
 
 ### Register (Active-Low)
 
@@ -297,7 +297,7 @@ nats req ionode-01.hal.heater ""
 
 ## Registering a PWM Output
 
-Named PWM outputs for motors, fans, dimmers — anything that needs variable power.
+Named PWM outputs for motors, fans, dimmers - anything that needs variable power.
 
 ### Register
 
@@ -401,7 +401,7 @@ nats req ionode-01.hal.rgb_led.set "0"           # off
 
 ## Threshold Events on Digital Inputs
 
-Registered sensors support threshold events — NATS notifications when a value crosses a boundary.
+Registered sensors support threshold events - NATS notifications when a value crosses a boundary.
 
 ### Example: Door Open Alert
 
@@ -451,8 +451,8 @@ Events persist across reboots.
 
 The on-device web UI at `http://{device-ip}/` supports all device types:
 
-- **Devices tab** — add/remove devices, see live values, toggle actuators
-- **Pins tab** — raw GPIO/ADC/PWM access with no registration needed
+- **Devices tab** - add/remove devices, see live values, toggle actuators
+- **Pins tab** - raw GPIO/ADC/PWM access with no registration needed
 - **Add Device** form supports all types: digital_in, digital_out, relay, pwm, rgb_led
 - Relay and digital output devices show **toggle switches**
 - PWM devices show **sliders** (0–255)
@@ -468,15 +468,15 @@ The on-device web UI at `http://{device-ip}/` supports all device types:
 | Digital write | `ionode gpio <node> <pin> set 1` | `ionode write <node> <name> 1` |
 | ADC read | `ionode adc <node> <pin>` | `ionode read <node> <name>` (analog_in) |
 | PWM write | `ionode pwm <node> <pin> set 128` | `ionode write <node> <name> 128` |
-| Relay | — | `ionode write <node> <name> 1` |
-| RGB LED | — | `ionode write <node> <name> 16711680` |
+| Relay | - | `ionode write <node> <name> 1` |
+| RGB LED | - | `ionode write <node> <name> 16711680` |
 
 ### Device Kinds
 
 | Kind | Type | Pin | Persisted | Inverted |
 |------|------|-----|-----------|----------|
-| `digital_in` | Sensor | GPIO | — | No |
-| `analog_in` | Sensor | ADC GPIO | — | No |
+| `digital_in` | Sensor | GPIO | - | No |
+| `analog_in` | Sensor | ADC GPIO | - | No |
 | `digital_out` | Actuator | GPIO | Yes | No |
 | `relay` | Actuator | GPIO | Yes | Optional |
 | `pwm` | Actuator | GPIO | No (safety) | No |
@@ -494,8 +494,8 @@ The on-device web UI at `http://{device-ip}/` supports all device types:
 
 ## See Also
 
-- [Standard Sensors Guide](IOnode-Standard-Sensors.md) — NTC thermistor, LDR, internal temperature
-- [I2C Sensors Guide](I2C-Sensors.md) — BME280, BH1750, SHT31, ADS1115
-- [I2C Display Guide](I2C-Display.md) — SSD1306 OLED display
-- [CLI Reference](CLI.md) — All CLI commands
-- [NATS API Reference](NATS-API.md) — Every NATS subject, payload, and response
+- [Standard Sensors Guide](IOnode-Standard-Sensors.md) - NTC thermistor, LDR, internal temperature
+- [I2C Sensors Guide](I2C-Sensors.md) - BME280, BH1750, SHT31, ADS1115
+- [I2C Display Guide](I2C-Display.md) - SSD1306 OLED display
+- [CLI Reference](CLI.md) - All CLI commands
+- [NATS API Reference](NATS-API.md) - Every NATS subject, payload, and response

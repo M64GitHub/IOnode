@@ -377,7 +377,7 @@ The `/api/devices/display` REST endpoint provides programmatic access.
 
 ## See Also
 
-- [I2C Sensors Guide](I2C-Sensors.md) — Wiring, sensor setup, all supported I2C sensors
-- [CLI Reference](CLI.md) — `ionode device add`, `ionode write`, `ionode i2c`
-- [NATS API Reference](NATS-API.md) — I2C HAL subjects, device.add payload format
-- [Release Notes](RELEASE-NOTES.md) — v0.3.0 I2C feature details
+- [I2C Sensors Guide](I2C-Sensors.md) - Wiring, sensor setup, all supported I2C sensors
+- [CLI Reference](CLI.md) - `ionode device add`, `ionode write`, `ionode i2c`
+- [NATS API Reference](NATS-API.md) - I2C HAL subjects, device.add payload format
+- [Release Notes](RELEASE-NOTES.md) - v0.3.0 I2C feature details

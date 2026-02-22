@@ -1,6 +1,6 @@
 # Standard Sensors: NTC, LDR, and Internal Temperature
 
-IOnode includes built-in sensor types for the most common measurements: temperature (NTC thermistor), light level (LDR), and chip temperature. No external libraries, no I2C, no driver code — just connect and read.
+IOnode includes built-in sensor types for the most common measurements: temperature (NTC thermistor), light level (LDR), and chip temperature. No external libraries, no I2C, no driver code - just connect and read.
 
 This guide covers wiring, registration, and reading for each sensor type. For I2C sensors (BME280, BH1750, SHT31, ADS1115), see the [I2C Sensors Guide](I2C-Sensors.md).
 
@@ -16,7 +16,7 @@ This guide covers wiring, registration, and reading for each sensor type. For I2
 
 ## Internal Temperature (`internal_temp`)
 
-The easiest sensor — zero wiring, already registered on every IOnode.
+The easiest sensor - zero wiring, already registered on every IOnode.
 
 ### Read It
 
@@ -164,17 +164,17 @@ Constants:
 
 The ESP32's SAR ADC reads ~60mV high after being idle for more than 1 second. IOnode handles this automatically:
 
-1. **Warmup burst** — 16 rapid reads to wake the ADC
-2. **300ms settle** — wait for the ADC to stabilize
-3. **Real read** — 16-sample average for noise reduction
+1. **Warmup burst** - 16 rapid reads to wake the ADC
+2. **300ms settle** - wait for the ADC to stabilize
+3. **Real read** - 16-sample average for noise reduction
 
-This happens on every NTC poll cycle. You don't need to do anything — readings are accurate out of the box.
+This happens on every NTC poll cycle. You don't need to do anything - readings are accurate out of the box.
 
 ### Polling and History
 
-- **Polled every 5 seconds** — the NTC value updates frequently for responsive readings
-- **History recorded every 5 minutes** — 6-sample ring buffer for sparkline display
-- **EMA-smoothed** — readings are stable, not jumpy
+- **Polled every 5 seconds** - the NTC value updates frequently for responsive readings
+- **History recorded every 5 minutes** - 6-sample ring buffer for sparkline display
+- **EMA-smoothed** - readings are stable, not jumpy
 
 ### Accuracy
 
@@ -278,7 +278,7 @@ ionode device add ionode-01 light ldr 3 --unit % --inverted
 3. Result:  result = inverted ? (100 - pct) : pct
 ```
 
-The output is a simple percentage — not lux. For calibrated lux readings, use an [I2C BH1750 sensor](I2C-Sensors.md) instead.
+The output is a simple percentage - not lux. For calibrated lux readings, use an [I2C BH1750 sensor](I2C-Sensors.md) instead.
 
 ### Threshold Event Example
 
@@ -304,9 +304,9 @@ nats req ionode-01.hal.light ""
 
 All registered sensors automatically get:
 
-- **EMA smoothing** — Exponential Moving Average for stable readings without sudden jumps
-- **6-sample history** — ring buffer recorded every 5 minutes, displayed as a sparkline in the web UI
-- **NTC special case** — polled every 5 seconds for responsive temperature readings; other sensors are read on demand and recorded every 5 minutes
+- **EMA smoothing** - Exponential Moving Average for stable readings without sudden jumps
+- **6-sample history** - ring buffer recorded every 5 minutes, displayed as a sparkline in the web UI
+- **NTC special case** - polled every 5 seconds for responsive temperature readings; other sensors are read on demand and recorded every 5 minutes
 
 The history and smoothing happen in the background with no configuration needed.
 
@@ -345,14 +345,14 @@ ionode event set ionode-01 temp --above 28 --cooldown 60
 
 ### Automate with a Script
 
-IOnode fires NATS events — your automation logic lives outside the device. A simple bash script:
+IOnode fires NATS events - your automation logic lives outside the device. A simple bash script:
 
 ```bash
 #!/bin/bash
 # Turn on fan when temperature event fires
 nats sub 'ionode-01.events.temp' | while read -r line; do
     nats req ionode-01.hal.fan.set "1" >/dev/null
-    echo "Fan ON — temperature threshold exceeded"
+    echo "Fan ON - temperature threshold exceeded"
 done
 ```
 
@@ -379,11 +379,11 @@ The on-device web UI at `http://{device-ip}/` supports all standard sensor types
 
 | Kind | What It Measures | Pin | Unit | Samples | Inverted |
 |------|-----------------|-----|------|---------|----------|
-| `internal_temp` | Chip die temperature | — (virtual) | C | — | No |
+| `internal_temp` | Chip die temperature | - (virtual) | C | - | No |
 | `ntc_10k` | External temperature (thermistor) | ADC GPIO | C | 16 avg | Optional |
 | `ldr` | Light level (photoresistor) | ADC GPIO | % | 16 avg | Optional |
-| `analog_in` | Raw ADC value | ADC GPIO | — | 1 | No |
-| `digital_in` | Digital pin state | GPIO | — | 1 | No |
+| `analog_in` | Raw ADC value | ADC GPIO | - | 1 | No |
+| `digital_in` | Digital pin state | GPIO | - | 1 | No |
 
 ### Constants
 
@@ -402,8 +402,8 @@ The on-device web UI at `http://{device-ip}/` supports all standard sensor types
 
 ## See Also
 
-- [GPIO & Actuators Guide](GPIO.md) — Raw GPIO, ADC, PWM, relays, digital I/O
-- [I2C Sensors Guide](I2C-Sensors.md) — BME280, BH1750, SHT31, ADS1115
-- [I2C Display Guide](I2C-Display.md) — SSD1306 OLED display
-- [CLI Reference](CLI.md) — All CLI commands including `ionode device add` and `ionode event set`
-- [NATS API Reference](NATS-API.md) — Every NATS subject, payload, and response
+- [GPIO & Actuators Guide](GPIO.md) - Raw GPIO, ADC, PWM, relays, digital I/O
+- [I2C Sensors Guide](I2C-Sensors.md) - BME280, BH1750, SHT31, ADS1115
+- [I2C Display Guide](I2C-Display.md) - SSD1306 OLED display
+- [CLI Reference](CLI.md) - All CLI commands including `ionode device add` and `ionode event set`
+- [NATS API Reference](NATS-API.md) - Every NATS subject, payload, and response

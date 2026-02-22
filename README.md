@@ -25,18 +25,18 @@ Your laptop / server / Raspberry Pi
 ## Contents
 
 - [Quick Start](#quick-start)
+- [Hello World](#hello-world) - your first sensor, display, and event
+- [Documentation](#documentation) - comprehensive guides
 - [CLI Tool](#cli-tool) - manage your fleet from the terminal
 - [Fleet Dashboard](#fleet-dashboard) - live web UI for monitoring
 - [Web UI (On-Device)](#web-ui-on-device) - per-node configuration
 - [Fleet Management](#fleet-management) - tags, heartbeats, events, remote config
 - [NATS Subject Reference](#nats-subject-reference) - the full protocol
-- [Device Kinds](#device-kinds) - sensors &amp; actuators
+- [Device Kinds](#device-kinds) - sensors & actuators
 - [Adding a New Sensor Type](#adding-a-new-sensor-type) - built to be hacked
-- [Building &amp; Flashing](#building--flashing)
+- [Building & Flashing](#building--flashing)
 - [OpenClaw Integration](#openclaw-integration) - natural language control
 - [Integrations](#integrations) - scripts, Node-RED, Home Assistant, anything
-
-**Documentation:** [`docs/`](docs/) - [Setup Guide](docs/SETUP.md) · [CLI Reference](docs/CLI.md) · [GPIO & Actuators](docs/GPIO.md) · [Standard Sensors](docs/IOnode-Standard-Sensors.md) · [I2C Sensors](docs/I2C-Sensors.md) · [I2C Display](docs/I2C-Display.md) · [Release Notes](docs/RELEASE-NOTES.md)
 
 ---
 
@@ -90,6 +90,48 @@ nats req ionode-01.hal.gpio.8.set "1"
 ```
 
 That's it. Your ESP32 speaks NATS.
+
+---
+
+## Hello World
+
+A temperature sensor, an OLED display, and a threshold alert - in four commands.
+
+```bash
+# 1. Register an NTC 10K thermistor on pin 2
+ionode device add ionode-01 room_temp ntc_10k 2 --unit C
+
+# 2. Register an SSD1306 OLED display (I2C address 60 = 0x3C)
+ionode device add ionode-01 display ssd1306 0 \
+  --i2c-addr 60 --template "Hello World!\n{room_temp}C"
+
+# 3. Alert when temperature exceeds 30°C (60s cooldown)
+ionode event set ionode-01 room_temp --above 30 --cooldown 60
+
+# 4. Read the sensor
+ionode read ionode-01 room_temp
+# → 23.4
+```
+
+The display auto-refreshes with the live temperature reading. The event fires a NATS notification on `ionode-01.events.room_temp` whenever the value crosses 30°C.
+
+All device types, wiring options, and configuration details are described in the sections below. For in-depth guides, see the [Documentation](#documentation) section.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Setup Guide](docs/SETUP.md) | NATS server installation, CLI setup, dashboard, network architecture |
+| [CLI Reference](docs/CLI.md) | All commands with examples, global options, NATS subject mapping |
+| [NATS API Reference](docs/NATS-API.md) | Complete protocol contract - every subject, payload, and response |
+| [GPIO & Actuators](docs/GPIO.md) | Digital I/O, relays, PWM, RGB LEDs - wiring, registration, persistence |
+| [Standard Sensors](docs/IOnode-Standard-Sensors.md) | NTC thermistors, LDR light sensors, internal temperature - wiring and calibration |
+| [I2C Sensors](docs/I2C-Sensors.md) | BME280, BH1750, SHT31, ADS1115, generic I2C - pin maps, multi-channel setup |
+| [I2C Display](docs/I2C-Display.md) | SSD1306 OLED - template engine, token reference, raw text mode |
+| [Release Notes](docs/RELEASE-NOTES.md) | Current release changelog |
+| [Release History](docs/RELEASE-HISTORY.md) | All past release notes |
 
 ---
 
@@ -231,7 +273,7 @@ Events persist across reboots. Configurable via CLI, NATS, web API, and the on-d
 
 ### Actuator State Persistence
 
-Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB LED values are NOT persisted - resuming arbitrary analog values on boot could be unsafe.
+Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB LED values are NOT persisted - resuming arbitrary analog values on boot could be unsafe. See [GPIO & Actuators](docs/GPIO.md) for details.
 
 ### Remote Configuration
 
@@ -329,6 +371,8 @@ Full protocol specification with payload formats and error handling: [`docs/NATS
 | `i2c_sht31` | SHT31 temp/humidity, channel via pin 0/1 |
 | `i2c_ads1115` | ADS1115 16-bit ADC, channel via pin 0-3 |
 
+Wiring diagrams and setup details: [Standard Sensors](docs/IOnode-Standard-Sensors.md) · [I2C Sensors](docs/I2C-Sensors.md)
+
 ### Actuators
 
 | Kind | What it does |
@@ -338,6 +382,8 @@ Full protocol specification with payload formats and error handling: [`docs/NATS
 | `pwm` | `analogWrite(pin, 0-255)` |
 | `rgb_led` | Built-in RGB LED, packed `0xRRGGBB` value |
 | `ssd1306` | SSD1306 OLED text display, template-driven |
+
+Wiring and configuration details: [GPIO & Actuators](docs/GPIO.md) · [I2C Display](docs/I2C-Display.md)
 
 ### Registering Devices
 
@@ -559,19 +605,16 @@ IOnode/
 │   ├── SETUP.md               Setup guide - start here
 │   ├── NATS-API.md            Protocol reference (source of truth)
 │   ├── CLI.md                 CLI command reference
-│   └── RELEASE-NOTES.md       Changelog
+│   ├── GPIO.md                GPIO, relays, PWM, RGB LEDs
+│   ├── IOnode-Standard-Sensors.md  NTC, LDR, internal temp
+│   ├── I2C-Sensors.md         BME280, BH1750, SHT31, ADS1115
+│   ├── I2C-Display.md         SSD1306 OLED & template engine
+│   ├── RELEASE-NOTES.md       Current release changelog
+│   └── RELEASE-HISTORY.md     Past release notes
 ├── skill/ionode/              OpenClaw integration skill
 └── README.md
 ```
 
 ---
 
-## Links
-
-- **Website:** [ionode.io](https://ionode.io)
-- **Flash from browser:** [ionode.io/flash.html](https://ionode.io/flash.html)
-- **Documentation:** [`docs/`](docs/) · [Setup](docs/SETUP.md) · [NATS API](docs/NATS-API.md) · [CLI](docs/CLI.md)
-- **WireClaw:** [wireclaw.io](https://wireclaw.io) - AI agent on ESP32, same protocol
-- **OpenClaw:** [openclaw](https://github.com/openclaw/openclaw) - Natural language hardware control
-
-*Part of the [WireClaw](https://github.com/M64GitHub/WireClaw) ecosystem.*
+*[ionode.io](https://ionode.io) · [Flash from browser](https://ionode.io/flash.html) · [WireClaw](https://wireclaw.io) · [OpenClaw](https://github.com/openclaw/openclaw) · Part of the [WireClaw](https://github.com/M64GitHub/WireClaw) ecosystem.*

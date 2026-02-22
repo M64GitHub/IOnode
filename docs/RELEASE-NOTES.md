@@ -68,8 +68,8 @@ ionode write ionode-01 display "!Hello World"
 
 ### Display Sizes
 
-- `pin=0` — 128x64 (8 lines x 21 chars)
-- `pin=1` — 128x32 (4 lines x 21 chars)
+- `pin=0` - 128x64 (8 lines x 21 chars)
+- `pin=1` - 128x32 (4 lines x 21 chars)
 
 ---
 
@@ -79,11 +79,11 @@ Raw I2C bus operations via NATS, even without registered devices.
 
 | Subject | Payload | Response |
 |---------|---------|----------|
-| `{name}.hal.i2c.scan` | — | `[60,104,118]` |
-| `{name}.hal.i2c.{addr}.detect` | — | `true` / `false` |
+| `{name}.hal.i2c.scan` | - | `[60,104,118]` |
+| `{name}.hal.i2c.{addr}.detect` | - | `true` / `false` |
 | `{name}.hal.i2c.{addr}.read` | `{"reg":0,"len":2}` | `[0,255]` |
 | `{name}.hal.i2c.{addr}.write` | `{"reg":0,"data":[1,2]}` | `ok` |
-| `{name}.hal.i2c.recover` | — | `ok` |
+| `{name}.hal.i2c.recover` | - | `ok` |
 
 Addresses in subjects are decimal (e.g., `i2c.60.detect` for 0x3C).
 
@@ -117,11 +117,11 @@ Bus is reference-counted: initialized on first I2C device registration, deinitia
 ## Web UI Updates
 
 - **I2C device types** in the Add Device dropdown (i2c_bme280, i2c_bh1750, i2c_sht31, i2c_ads1115, i2c_generic, ssd1306)
-- **I2C form fields** — address, channel, unit, template, generic settings (register, length, scale)
-- **I2C scan** button — scans the bus and shows detected addresses
-- **SSD1306 control card** — text input with send and clear buttons
-- **`/api/i2c/scan`** endpoint — returns detected I2C addresses
-- **`/api/devices/display`** endpoint — send text to SSD1306 displays
+- **I2C form fields** - address, channel, unit, template, generic settings (register, length, scale)
+- **I2C scan** button - scans the bus and shows detected addresses
+- **SSD1306 control card** - text input with send and clear buttons
+- **`/api/i2c/scan`** endpoint - returns detected I2C addresses
+- **`/api/devices/display`** endpoint - send text to SSD1306 displays
 
 ---
 
@@ -167,15 +167,15 @@ Bus is reference-counted: initialized on first I2C device registration, deinitia
 
 ## Files Modified
 
-- `include/devices.h` — New enum entries, struct fields, updated function signatures
-- `src/devices.cpp` — I2C device kinds, read/write, init/deinit, persistence
-- `src/nats_hal.cpp` — I2C HAL handler (scan, detect, read, write, recover)
-- `src/nats_config.cpp` — I2C kind mapping, `ia`/`dt`/`rl`/`sc` field parsing
-- `src/web_config.cpp` — I2C device form, scan endpoint, display endpoint
-- `src/main.cpp` — `displayPoll()` in loop, `"i2c":true` in capabilities
-- `cli/ionode` — `i2c` command routing and help
-- `cli/lib/cmd_hardware.sh` — `cmd_i2c` function (scan, detect, read, write, recover)
-- `cli/lib/cmd_config.sh` — `--i2c-addr`, `--channel`, `--template`, `--reg-len`, `--scale` flags
+- `include/devices.h` - New enum entries, struct fields, updated function signatures
+- `src/devices.cpp` - I2C device kinds, read/write, init/deinit, persistence
+- `src/nats_hal.cpp` - I2C HAL handler (scan, detect, read, write, recover)
+- `src/nats_config.cpp` - I2C kind mapping, `ia`/`dt`/`rl`/`sc` field parsing
+- `src/web_config.cpp` - I2C device form, scan endpoint, display endpoint
+- `src/main.cpp` - `displayPoll()` in loop, `"i2c":true` in capabilities
+- `cli/ionode` - `i2c` command routing and help
+- `cli/lib/cmd_hardware.sh` - `cmd_i2c` function (scan, detect, read, write, recover)
+- `cli/lib/cmd_config.sh` - `--i2c-addr`, `--channel`, `--template`, `--reg-len`, `--scale` flags
 
 ---
 
@@ -183,4 +183,4 @@ Bus is reference-counted: initialized on first I2C device registration, deinitia
 
 All 4 targets build: ESP32-C6, ESP32-S3, ESP32-C3, classic ESP32. Flash usage well within 2MB budget (~16KB added).
 
-No breaking changes. Existing `devices.json` files work unchanged — persistence uses string kind names, not enum values. New fields default safely (`i2c_addr=0`, `i2c_reg_len=1`, `i2c_scale=1.0`).
+No breaking changes. Existing `devices.json` files work unchanged - persistence uses string kind names, not enum values. New fields default safely (`i2c_addr=0`, `i2c_reg_len=1`, `i2c_scale=1.0`).
