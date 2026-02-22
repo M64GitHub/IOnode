@@ -11,14 +11,15 @@ Flash it, name it, point it at a NATS server - done. Read sensors from a script,
 
 **Supported chips:** ESP32-C6 · ESP32-S3 · ESP32-C3 · ESP32
 
+**Supports:** GPIO · ADC · PWM · Relays · NTC & LDR sensors · I2C (BME280, BH1750, SHT31, ADS1115) · SSD1306 OLED display · RGB LED · UART
 
 ```
 Your laptop / server / Raspberry Pi
     |
     +-- NATS server
-          |-- ionode-01.hal.*      <-- temperature sensor, relay
-          |-- ionode-02.hal.*      <-- ADC inputs, PWM outputs
-          +-- ionode-03.hal.*      <-- UART bridge, GPIO
+          |-- ionode-01.hal.*      <-- BME280 + OLED display, relay
+          |-- ionode-02.hal.*      <-- NTC temp, LDR, PWM fan
+          +-- ionode-03.hal.*      <-- ADS1115 ADC, GPIO, UART
 ```
 
 ## Contents
