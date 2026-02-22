@@ -129,6 +129,7 @@ All device types, wiring options, and configuration details are described in the
 | [I2C Sensors](docs/I2C-Sensors.md) | BME280, BH1750, SHT31, ADS1115, generic I2C - pin maps, multi-channel setup |
 | [I2C Display](docs/I2C-Display.md) | SSD1306 OLED - template engine, token reference, raw text mode |
 | [CLI Reference](docs/CLI.md) | All commands with examples, global options, NATS subject mapping |
+| [NATS API Reference](docs/NATS-API.md) | Complete protocol contract - every subject, payload, and response |
 
 ---
 
@@ -282,105 +283,40 @@ Complete protocol reference: [`docs/NATS-API.md`](docs/NATS-API.md)
 
 ## NATS Subject Reference
 
-All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are plain text or simple values. Responses come back via NATS request/reply.
+All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are plain text or JSON. Responses come back via NATS request/reply.
 
-Full protocol specification with payload formats and error handling: [`docs/NATS-API.md`](docs/NATS-API.md)
+```
+{name}.hal.gpio.{pin}.get/set          GPIO read/write
+{name}.hal.adc.{pin}.read              12-bit ADC
+{name}.hal.pwm.{pin}.set/get           8-bit PWM
+{name}.hal.uart.read/write             Serial I/O
+{name}.hal.i2c.scan/detect/read/write  I2C bus access
+{name}.hal.system.*                    Chip temp, heap, uptime, RSSI
+{name}.hal.{dev}.get/set/info          Registered device operations
+{name}.config.*                        Remote configuration
+_ion.discover / _ion.heartbeat         Fleet discovery & monitoring
+{name}.events.{sensor}                 Threshold event notifications
+```
 
-### Core HAL (always available, zero config)
+Complete protocol specification with payload formats, error handling, and CLI mapping: [`docs/NATS-API.md`](docs/NATS-API.md)
 
-| Subject | Payload | Response | Notes |
-|---------|---------|----------|-------|
-| `{name}.hal.gpio.{pin}.get` | - | `0` or `1` | Sets pin to INPUT, reads |
-| `{name}.hal.gpio.{pin}.set` | `0` or `1` | `ok` | Sets pin to OUTPUT, writes |
-| `{name}.hal.adc.{pin}.read` | - | `0`-`4095` | 12-bit raw ADC |
-| `{name}.hal.pwm.{pin}.set` | `0`-`255` | `ok` | 8-bit PWM output |
-| `{name}.hal.pwm.{pin}.get` | - | `0`-`255` | Last written PWM value (cached) |
-| `{name}.hal.uart.read` | - | last line | Requires a `serial_text` device |
-| `{name}.hal.uart.write` | text | `ok` | Requires a `serial_text` device |
-| `{name}.hal.i2c.scan` | - | `[60,118]` | Detected I2C addresses |
-| `{name}.hal.i2c.{addr}.detect` | - | `true`/`false` | Addresses in decimal |
-| `{name}.hal.i2c.{addr}.read` | `{"reg":N,"len":N}` | `[bytes]` | Read I2C register |
-| `{name}.hal.i2c.{addr}.write` | `{"reg":N,"data":[...]}` | `ok` | Write I2C register |
-| `{name}.hal.system.temperature` | - | `38.1` | Chip temp in °C |
-| `{name}.hal.system.heap` | - | `156000` | Free heap bytes |
-| `{name}.hal.system.uptime` | - | `3600` | Seconds since boot |
-| `{name}.hal.system.rssi` | - | `-52` | WiFi signal strength |
-| `{name}.hal.system.reset_reason` | - | `software` | Last reset reason |
-| `{name}.hal.system.nats_reconnects` | - | `1` | NATS reconnect count |
-| `{name}.hal.device.list` | - | JSON array | All registered devices + values |
-
-### Registered Devices
-
-| Subject | Payload | Response |
-|---------|---------|----------|
-| `{name}.hal.{dev}` | - | Sensor value or actuator state |
-| `{name}.hal.{dev}.get` | - | Same as above |
-| `{name}.hal.{dev}.set` | value | `ok` (actuators only) |
-| `{name}.hal.{dev}.info` | - | JSON: name, kind, value, pin, unit |
-
-### Discovery &amp; Fleet
-
-| Subject | Payload | Response | Notes |
-|---------|---------|----------|-------|
-| `_ion.discover` | - | Capabilities JSON | All nodes respond |
-| `{name}.capabilities` | - | Capabilities JSON | Single node |
-| `_ion.group.{tag}` | - | Capabilities JSON | All nodes with matching tag |
-| `_ion.heartbeat` | _(subscribe)_ | Health JSON | Periodic, default every 60s |
-| `{name}.events.{sensor}` | _(subscribe)_ | Threshold event JSON | Edge-detected alerts |
-
-### Remote Configuration
-
-| Subject | Payload | Response |
-|---------|---------|----------|
-| `{name}.config.get` | - | Config JSON (password excluded) |
-| `{name}.config.device.list` | - | JSON array of devices |
-| `{name}.config.device.add` | `{"n":"x","k":"relay","p":5}` | `{"ok":true}` |
-| `{name}.config.device.remove` | `{"n":"x"}` | `{"ok":true}` |
-| `{name}.config.tag.set` | `greenhouse` | `{"ok":true}` |
-| `{name}.config.tag.get` | - | `{"tag":"greenhouse"}` |
-| `{name}.config.heartbeat.set` | `60` | `{"ok":true}` |
-| `{name}.config.event.set` | `{"n":"x","t":28,"d":"above","cd":10}` | `{"ok":true}` |
-| `{name}.config.event.clear` | `{"n":"x"}` | `{"ok":true}` |
-| `{name}.config.event.list` | - | JSON array |
-| `{name}.config.name.set` | `new-name` | `{"ok":true}` (reboots) |
+- [Discovery & Inventory](docs/NATS-API.md#1-discovery--inventory) — find nodes, query groups, capabilities format
+- [Hardware Access (HAL)](docs/NATS-API.md#2-hardware-access-hal) — GPIO, ADC, PWM, UART, I2C, system queries
+- [Registered Devices](docs/NATS-API.md#3-registered-devices) — read sensors, set actuators, device info
+- [Remote Configuration](docs/NATS-API.md#4-remote-configuration) — device registry, tags, heartbeat, events, rename
+- [Monitoring](docs/NATS-API.md#5-monitoring) — heartbeats, threshold events, event configuration
 
 ---
 
 ## Device Kinds
 
-### Sensors
+**Sensors:** `digital_in` · `analog_in` · `ntc_10k` · `ldr` · `internal_temp` · `clock_hour` · `clock_minute` · `clock_hhmm` · `nats_value` · `serial_text` · `i2c_generic` · `i2c_bme280` · `i2c_bh1750` · `i2c_sht31` · `i2c_ads1115`
 
-| Kind | What it does |
-|------|--------------|
-| `digital_in` | `digitalRead(pin)` → 0 or 1 |
-| `analog_in` | `analogRead(pin)` → 0–4095 (12-bit) |
-| `ntc_10k` | 10K NTC thermistor, Steinhart-Hart, EMA-smoothed |
-| `ldr` | Light-dependent resistor → 0–100% |
-| `internal_temp` | ESP32 on-die temperature sensor |
-| `clock_hour` | Current hour (0–23) from NTP |
-| `clock_minute` | Current minute (0–59) from NTP |
-| `clock_hhmm` | HHMM format (e.g. 1430 = 2:30 PM) |
-| `nats_value` | Subscribes to a NATS subject, stores last value |
-| `serial_text` | Reads lines from UART1, parses numeric value |
-| `i2c_generic` | Raw I2C register read, configurable addr/reg/len/scale |
-| `i2c_bme280` | BME280 temp/humidity/pressure, channel via pin 0/1/2 |
-| `i2c_bh1750` | BH1750 ambient light (lux) |
-| `i2c_sht31` | SHT31 temp/humidity, channel via pin 0/1 |
-| `i2c_ads1115` | ADS1115 16-bit ADC, channel via pin 0-3 |
+**Actuators:** `digital_out` · `relay` · `pwm` · `rgb_led` · `ssd1306`
 
-Wiring diagrams and setup details: [Standard Sensors](docs/IOnode-Standard-Sensors.md) · [I2C Sensors](docs/I2C-Sensors.md)
+Full reference with descriptions: [Supported Device Kinds](docs/NATS-API.md#supported-device-kinds)
 
-### Actuators
-
-| Kind | What it does |
-|------|--------------|
-| `digital_out` | `digitalWrite(pin, val)` |
-| `relay` | `digitalWrite` with optional inversion |
-| `pwm` | `analogWrite(pin, 0-255)` |
-| `rgb_led` | Built-in RGB LED, packed `0xRRGGBB` value |
-| `ssd1306` | SSD1306 OLED text display, template-driven |
-
-Wiring and configuration details: [GPIO & Actuators](docs/GPIO.md) · [I2C Display](docs/I2C-Display.md)
+Wiring and configuration guides: [GPIO & Actuators](docs/GPIO.md) · [Standard Sensors](docs/IOnode-Standard-Sensors.md) · [I2C Sensors](docs/I2C-Sensors.md) · [I2C Display](docs/I2C-Display.md)
 
 ### Registering Devices
 
@@ -409,7 +345,9 @@ Or edit `data/devices.json` directly:
 ]
 ```
 
-Fields: `n`=name, `k`=kind, `p`=pin (255=virtual), `u`=unit, `i`=inverted, `ns`=nats_subject (for `nats_value`), `bd`=baud (for `serial_text`).
+Fields: `n`=name, `k`=kind, `p`=pin (255=virtual), `u`=unit, `i`=inverted, `ns`=nats_subject (for `nats_value`), `bd`=baud (for `serial_text`), `ia`=I2C address, `dt`=display template, `rl`=register read length, `sc`=scale multiplier.
+
+Full payload reference: [Device Registry Management](docs/NATS-API.md#device-registry-management)
 
 ---
 
