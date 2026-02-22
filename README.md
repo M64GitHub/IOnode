@@ -300,11 +300,11 @@ _ion.discover / _ion.heartbeat         Fleet discovery & monitoring
 
 Complete protocol specification with payload formats, error handling, and CLI mapping: [`docs/NATS-API.md`](docs/NATS-API.md)
 
-- [Discovery & Inventory](docs/NATS-API.md#1-discovery--inventory) — find nodes, query groups, capabilities format
-- [Hardware Access (HAL)](docs/NATS-API.md#2-hardware-access-hal) — GPIO, ADC, PWM, UART, I2C, system queries
-- [Registered Devices](docs/NATS-API.md#3-registered-devices) — read sensors, set actuators, device info
-- [Remote Configuration](docs/NATS-API.md#4-remote-configuration) — device registry, tags, heartbeat, events, rename
-- [Monitoring](docs/NATS-API.md#5-monitoring) — heartbeats, threshold events, event configuration
+- [Discovery & Inventory](docs/NATS-API.md#1-discovery--inventory) - find nodes, query groups, capabilities format
+- [Hardware Access (HAL)](docs/NATS-API.md#2-hardware-access-hal) - GPIO, ADC, PWM, UART, I2C, system queries
+- [Registered Devices](docs/NATS-API.md#3-registered-devices) - read sensors, set actuators, device info
+- [Remote Configuration](docs/NATS-API.md#4-remote-configuration) - device registry, tags, heartbeat, events, rename
+- [Monitoring](docs/NATS-API.md#5-monitoring) - heartbeats, threshold events, event configuration
 
 ---
 
