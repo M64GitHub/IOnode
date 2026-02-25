@@ -445,6 +445,11 @@ static void handleAddDevice() {
     else if (strcmp(kind_str, "i2c_sht31") == 0)   kind = DEV_SENSOR_I2C_SHT31;
     else if (strcmp(kind_str, "i2c_ads1115") == 0)  kind = DEV_SENSOR_I2C_ADS1115;
     else if (strcmp(kind_str, "ssd1306") == 0)     kind = DEV_ACTUATOR_SSD1306;
+    else if (strcmp(kind_str, "sh1106") == 0)      kind = DEV_ACTUATOR_SH1106;
+    else if (strcmp(kind_str, "dht11_temp") == 0)  kind = DEV_SENSOR_DHT11_TEMP;
+    else if (strcmp(kind_str, "dht11_humi") == 0)  kind = DEV_SENSOR_DHT11_HUMI;
+    else if (strcmp(kind_str, "dht22_temp") == 0)  kind = DEV_SENSOR_DHT22_TEMP;
+    else if (strcmp(kind_str, "dht22_humi") == 0)  kind = DEV_SENSOR_DHT22_HUMI;
     else {
         server.send(400, "application/json", "{\"ok\":false,\"error\":\"unknown kind\"}");
         return;
@@ -468,10 +473,12 @@ static void handleAddDevice() {
         if (kind == DEV_SENSOR_NTC_10K) unit = "C";
         else if (kind == DEV_SENSOR_LDR) unit = "%";
         else if (kind == DEV_SENSOR_I2C_BH1750) unit = "lux";
+        else if (kind == DEV_SENSOR_DHT11_TEMP || kind == DEV_SENSOR_DHT22_TEMP) unit = "C";
+        else if (kind == DEV_SENSOR_DHT11_HUMI || kind == DEV_SENSOR_DHT22_HUMI) unit = "%";
     }
 
-    /* SSD1306 defaults */
-    if (kind == DEV_ACTUATOR_SSD1306) pin = (uint8_t)wcJsonGetInt(body, "pin", 0);
+    /* OLED display defaults (SSD1306/SH1106) */
+    if (deviceIsDisplay(kind)) pin = (uint8_t)wcJsonGetInt(body, "pin", 0);
 
     bool ok = deviceRegister(name, kind, (uint8_t)pin, unit, inverted, nullptr, baud,
                              i2c_addr, disp_tmpl[0] ? disp_tmpl : nullptr,
@@ -646,7 +653,7 @@ static void handleI2cScan() {
 }
 
 /*============================================================================
- * SSD1306 Display Text API
+ * OLED Display Text API (SSD1306 / SH1106)
  *============================================================================*/
 
 static void handleSetDisplayText() {
@@ -663,10 +670,12 @@ static void handleSetDisplayText() {
     }
 
     Device *dev = deviceFind(name);
-    if (!dev || dev->kind != DEV_ACTUATOR_SSD1306) {
-        server.send(404, "application/json", "{\"ok\":false,\"error\":\"not an SSD1306 device\"}");
+    if (!dev || !deviceIsDisplay(dev->kind)) {
+        server.send(404, "application/json", "{\"ok\":false,\"error\":\"not a display device\"}");
         return;
     }
+
+    uint8_t col_offset = (dev->kind == DEV_ACTUATOR_SH1106) ? 2 : 0;
 
     /* Check for raw text (! prefix) or template update */
     char text[128] = "";
@@ -674,6 +683,10 @@ static void handleSetDisplayText() {
 
     if (text[0] == '!') {
         /* Raw text mode: write directly without template interpolation */
+        /* Unescape literal \n to real newlines */
+        { char *r = text, *w = text;
+          while (*r) { if (r[0]=='\\' && r[1]=='n') { *w++='\n'; r+=2; } else { *w++=*r++; } }
+          *w = '\0'; }
         uint8_t height = (dev->pin == 1) ? 32 : 64;
         int max_lines = (height == 32) ? 4 : 8;
         char *line_start = text + 1;
@@ -681,13 +694,13 @@ static void handleSetDisplayText() {
         while (line_start && *line_start && line_num < max_lines) {
             char *nl = strchr(line_start, '\n');
             if (nl) *nl = '\0';
-            ssd1306WriteText(dev->i2c_addr, line_num, line_start);
+            ssd1306WriteText(dev->i2c_addr, line_num, line_start, col_offset);
             line_num++;
             if (nl) line_start = nl + 1;
             else break;
         }
         while (line_num < max_lines) {
-            ssd1306WriteText(dev->i2c_addr, line_num, "");
+            ssd1306WriteText(dev->i2c_addr, line_num, "", col_offset);
             line_num++;
         }
     } else if (text[0]) {
@@ -695,10 +708,11 @@ static void handleSetDisplayText() {
         strncpy(dev->disp_template, text, sizeof(dev->disp_template) - 1);
         dev->disp_template[sizeof(dev->disp_template) - 1] = '\0';
         uint8_t height = (dev->pin == 1) ? 32 : 64;
-        ssd1306RenderTemplate(dev->i2c_addr, dev->disp_template, height);
+        ssd1306RenderTemplate(dev->i2c_addr, dev->disp_template, height, col_offset);
         devicesMarkDirty();
     }
 
+    displayPollReset();
     server.send(200, "application/json", "{\"ok\":true}");
 }
 
@@ -947,6 +961,11 @@ nav button{padding:0.4rem 0.6rem;font-size:0.8rem}
 <option value="i2c_ads1115">i2c_ads1115</option>
 <option value="i2c_generic">i2c_generic</option>
 <option value="ssd1306">ssd1306</option>
+<option value="sh1106">sh1106</option>
+<option value="dht11_temp">dht11_temp</option>
+<option value="dht11_humi">dht11_humi</option>
+<option value="dht22_temp">dht22_temp</option>
+<option value="dht22_humi">dht22_humi</option>
 </select>
 </div>
 </div>
@@ -964,7 +983,7 @@ nav button{padding:0.4rem 0.6rem;font-size:0.8rem}
 <div id="ad_i2c_wrap" class="hidden">
 <label>I2C Address (decimal)</label>
 <input type="number" id="ad_i2c_addr" placeholder="e.g. 118 for 0x76">
-<p class="hint">Common: BME280=0x76(118), BH1750=0x23(35), SHT31=0x44(68), ADS1115=0x48(72), SSD1306=0x3C(60)</p>
+<p class="hint">Common: BME280=0x76(118), BH1750=0x23(35), SHT31=0x44(68), ADS1115=0x48(72), SSD1306/SH1106=0x3C(60)</p>
 </div>
 <div id="ad_chan_wrap" class="hidden">
 <label>Channel</label>
@@ -1101,7 +1120,9 @@ if(devTimer)loadDevices();
 }
 function adKindChange(){
 var k=document.getElementById('ad_kind').value;
-var isI2c=k.startsWith('i2c_')||k==='ssd1306';
+var isI2c=k.startsWith('i2c_')||k==='ssd1306'||k==='sh1106';
+var isDht=k.startsWith('dht');
+var isDisp=k==='ssd1306'||k==='sh1106';
 var isMultiChan=k==='i2c_bme280'||k==='i2c_sht31'||k==='i2c_ads1115';
 document.getElementById('ad_pin_wrap').classList.toggle('hidden',k==='serial_text'||isI2c);
 document.getElementById('ad_inv_wrap').classList.toggle('hidden',k!=='relay'&&k!=='ntc_10k'&&k!=='ldr');
@@ -1110,7 +1131,7 @@ document.getElementById('ad_baud_wrap').classList.toggle('hidden',k!=='serial_te
 document.getElementById('ad_i2c_wrap').classList.toggle('hidden',!isI2c);
 document.getElementById('ad_chan_wrap').classList.toggle('hidden',!isMultiChan);
 document.getElementById('ad_unit_wrap').classList.toggle('hidden',!isI2c);
-document.getElementById('ad_tmpl_wrap').classList.toggle('hidden',k!=='ssd1306');
+document.getElementById('ad_tmpl_wrap').classList.toggle('hidden',!isDisp);
 document.getElementById('ad_generic_wrap').classList.toggle('hidden',k!=='i2c_generic');
 document.getElementById('ad_scan_btn').classList.toggle('hidden',!isI2c);
 if(k==='i2c_bme280'){document.getElementById('ad_chan_hint').textContent='0=temp, 1=humidity, 2=pressure';document.getElementById('ad_chan').max=2}
@@ -1122,7 +1143,7 @@ var name=document.getElementById('ad_name').value.trim();
 var kind=document.getElementById('ad_kind').value;
 if(!name){toast('Name required',false);return}
 var d={name:name,kind:kind};
-var isI2c=kind.startsWith('i2c_')||kind==='ssd1306';
+var isI2c=kind.startsWith('i2c_')||kind==='ssd1306'||kind==='sh1106';
 if(kind==='serial_text'){
 d.baud=parseInt(document.getElementById('ad_baud').value)||9600;
 }else if(isI2c){
@@ -1134,7 +1155,7 @@ if(u)d.unit=u;
 if(kind==='i2c_bme280'||kind==='i2c_sht31'||kind==='i2c_ads1115'){
 d.pin=parseInt(document.getElementById('ad_chan').value)||0;
 }
-if(kind==='ssd1306'){
+if(kind==='ssd1306'||kind==='sh1106'){
 var tmpl=document.getElementById('ad_tmpl').value;
 if(tmpl)d.template=tmpl;
 d.pin=0;
@@ -1187,7 +1208,7 @@ h+='</div>';
 }else if(d.kind==='pwm'){
 h+='<div class="dev-meta">pin '+d.pin+'</div>';
 h+='<div class="pwm-wrap"><input type="range" min="0" max="255" value="'+d.raw+'" oninput="pwmSlide(this,\''+d.name+'\')"><span class="pwm-val">'+d.raw+'</span></div>';
-}else if(d.kind==='ssd1306'){
+}else if(d.kind==='ssd1306'||d.kind==='sh1106'){
 if(d.extra)h+='<div class="dev-meta">I2C '+d.extra+'</div>';
 h+='<div class="dev-meta">'+d.value+'</div>';
 h+='<div style="margin-top:0.4rem"><input type="text" id="dt_'+d.name+'" placeholder="Template or !raw text" style="font-size:0.8rem;padding:0.3rem 0.5rem">';

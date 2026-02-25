@@ -237,11 +237,16 @@ Operations on named sensors and actuators registered in `devices.json`.
 | `i2c_bh1750` | sensor | BH1750 ambient light (lux) |
 | `i2c_sht31` | sensor | SHT31 temp/humidity, channel via pin 0/1 |
 | `i2c_ads1115` | sensor | ADS1115 16-bit ADC, channel via pin 0–3 |
+| `dht11_temp` | sensor | DHT11 temperature (integer, 0–50°C) |
+| `dht11_humi` | sensor | DHT11 humidity (integer, 20–80% RH) |
+| `dht22_temp` | sensor | DHT22 temperature (0.1° resolution, -40–80°C) |
+| `dht22_humi` | sensor | DHT22 humidity (0.1° resolution, 0–100% RH) |
 | `digital_out` | actuator | `digitalWrite` |
 | `relay` | actuator | `digitalWrite` with optional inversion |
 | `pwm` | actuator | `analogWrite` 0–255 |
 | `rgb_led` | actuator | Built-in RGB LED, packed `0xRRGGBB` |
 | `ssd1306` | actuator | SSD1306 OLED text display, template-driven |
+| `sh1106` | actuator | SH1106 OLED text display, template-driven |
 
 ---
 
@@ -278,7 +283,7 @@ All config subjects use the `{name}.config.>` wildcard namespace.
 - `bd` - baud rate (optional, for `serial_text` kind only)
 - `ns` - NATS subject (optional, for `nats_value` kind only)
 - `ia` - I2C slave address (optional, for I2C kinds, 0–127)
-- `dt` - display template (optional, for `ssd1306` kind, `{device_name}` tokens replaced with live values)
+- `dt` - display template (optional, for `ssd1306`/`sh1106` kinds, `{device_name}` tokens replaced with live values)
 - `rl` - I2C register read length (optional, for `i2c_generic`, 1 or 2, default 1)
 - `sc` - I2C scale multiplier (optional, for `i2c_generic`, default 1.0)
 

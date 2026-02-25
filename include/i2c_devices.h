@@ -119,50 +119,60 @@ float i2cSht31Read(uint8_t addr, uint8_t channel);
 float i2cAds1115Read(uint8_t addr, uint8_t channel);
 
 /*============================================================================
- * SSD1306 OLED Display Driver
+ * OLED Display Driver (SSD1306 / SH1106)
  *============================================================================*/
 
 /**
- * Initialize SSD1306 display.
- * @param addr   I2C address (typically 0x3C or 0x3D)
- * @param height Display height: 64 or 32
+ * Initialize OLED display (SSD1306 or SH1106).
+ * @param addr       I2C address (typically 0x3C or 0x3D)
+ * @param height     Display height: 64 or 32
+ * @param col_offset Column offset (0 for SSD1306, 2 for SH1106)
  * @return true on success
  */
-bool ssd1306Init(uint8_t addr, uint8_t height);
+bool ssd1306Init(uint8_t addr, uint8_t height, uint8_t col_offset = 0);
 
 /**
- * Deinitialize SSD1306 display (clear screen, display off).
- * @param addr I2C address
+ * Deinitialize display (clear screen, display off).
+ * @param addr       I2C address
+ * @param col_offset Column offset (0 for SSD1306, 2 for SH1106)
  */
-void ssd1306Deinit(uint8_t addr);
+void ssd1306Deinit(uint8_t addr, uint8_t col_offset = 0);
 
 /**
  * Clear display buffer and screen.
- * @param addr I2C address
+ * @param addr       I2C address
+ * @param col_offset Column offset (0 for SSD1306, 2 for SH1106)
  */
-void ssd1306Clear(uint8_t addr);
+void ssd1306Clear(uint8_t addr, uint8_t col_offset = 0);
 
 /**
  * Write text to display at given line.
- * @param addr I2C address
- * @param line Line number (0-based, max 7 for 64px, 3 for 32px)
- * @param text Text to display (max 21 chars per line)
+ * @param addr       I2C address
+ * @param line       Line number (0-based, max 7 for 64px, 3 for 32px)
+ * @param text       Text to display (max 21 chars per line)
+ * @param col_offset Column offset (0 for SSD1306, 2 for SH1106)
  */
-void ssd1306WriteText(uint8_t addr, uint8_t line, const char *text);
+void ssd1306WriteText(uint8_t addr, uint8_t line, const char *text, uint8_t col_offset = 0);
 
 /**
  * Render a full template string to the display.
  * Template may contain {device_name} tokens and \n for line breaks.
- * @param addr      I2C address
- * @param tmpl      Template string
- * @param height    Display height (64 or 32)
+ * @param addr       I2C address
+ * @param tmpl       Template string
+ * @param height     Display height (64 or 32)
+ * @param col_offset Column offset (0 for SSD1306, 2 for SH1106)
  */
-void ssd1306RenderTemplate(uint8_t addr, const char *tmpl, uint8_t height);
+void ssd1306RenderTemplate(uint8_t addr, const char *tmpl, uint8_t height, uint8_t col_offset = 0);
 
 /**
  * Poll all SSD1306 displays — refresh templates with live sensor values.
- * Call from main loop every ~5 seconds.
+ * Call from main loop every ~2 seconds.
  */
 void displayPoll();
+
+/**
+ * Reset display poll timer (call after explicit render to avoid double-render).
+ */
+void displayPollReset();
 
 #endif /* I2C_DEVICES_H */

@@ -552,6 +552,49 @@ static void halDeviceLookup(nats_client_t *client, const nats_msg_t *msg,
             halError(client, msg, "not_actuator", devName);
             return;
         }
+
+        /* Display actuators: handle text/template payloads */
+        if (deviceIsDisplay(dev->kind) && payload[0] && !isdigit((unsigned char)payload[0]) && payload[0] != '-') {
+            uint8_t col_offset = (dev->kind == DEV_ACTUATOR_SH1106) ? 2 : 0;
+            uint8_t height = (dev->pin == 1) ? 32 : 64;
+
+            if (payload[0] == '!') {
+                /* Raw text mode: write directly without template interpolation */
+                char buf[128];
+                strncpy(buf, payload + 1, sizeof(buf) - 1);
+                buf[sizeof(buf) - 1] = '\0';
+                /* Unescape literal \n to real newlines */
+                { char *r = buf, *w = buf;
+                  while (*r) { if (r[0]=='\\' && r[1]=='n') { *w++='\n'; r+=2; } else { *w++=*r++; } }
+                  *w = '\0'; }
+                int max_lines = (height == 32) ? 4 : 8;
+                char *line_start = buf;
+                int line_num = 0;
+                while (line_start && *line_start && line_num < max_lines) {
+                    char *nl = strchr(line_start, '\n');
+                    if (nl) *nl = '\0';
+                    ssd1306WriteText(dev->i2c_addr, line_num, line_start, col_offset);
+                    line_num++;
+                    if (nl) line_start = nl + 1;
+                    else break;
+                }
+                while (line_num < max_lines) {
+                    ssd1306WriteText(dev->i2c_addr, line_num, "", col_offset);
+                    line_num++;
+                }
+            } else {
+                /* Template mode: update template and render */
+                strncpy(dev->disp_template, payload, sizeof(dev->disp_template) - 1);
+                dev->disp_template[sizeof(dev->disp_template) - 1] = '\0';
+                ssd1306RenderTemplate(dev->i2c_addr, dev->disp_template, height, col_offset);
+                devicesMarkDirty();
+            }
+            displayPollReset();
+            if (msg->reply_len > 0)
+                nats_msg_respond_str(client, msg, "ok");
+            return;
+        }
+
         int val = payload[0] ? atoi(payload) : 0;
         deviceSetActuator(dev, val);
         if (msg->reply_len > 0)
@@ -613,7 +656,7 @@ void onNatsHal(nats_client_t *client, const nats_msg_t *msg, void *userdata) {
     const char *suffix = msg->subject + halPrefixLen();
 
     /* Copy payload into null-terminated stack buffer */
-    char payload[64];
+    char payload[256];
     size_t plen = msg->data_len < sizeof(payload) - 1
                   ? msg->data_len : sizeof(payload) - 1;
     if (msg->data && plen > 0)

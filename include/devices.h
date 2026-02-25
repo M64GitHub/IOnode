@@ -34,12 +34,18 @@ enum DeviceKind {
     DEV_SENSOR_I2C_BH1750,     /* BH1750: ambient light lux */
     DEV_SENSOR_I2C_SHT31,      /* SHT31: temp/humidity, channel via pin 0/1 */
     DEV_SENSOR_I2C_ADS1115,    /* ADS1115: 16-bit ADC, channel via pin 0-3 */
+    /* DHT single-wire sensors */
+    DEV_SENSOR_DHT11_TEMP,     /* DHT11 temperature (integer, 0-50°C) */
+    DEV_SENSOR_DHT11_HUMI,     /* DHT11 humidity (integer, 20-80% RH) */
+    DEV_SENSOR_DHT22_TEMP,     /* DHT22 temperature (0.1° res, -40–80°C) */
+    DEV_SENSOR_DHT22_HUMI,     /* DHT22 humidity (0.1° res, 0-100% RH) */
     /* Actuators */
     DEV_ACTUATOR_DIGITAL,       /* digitalWrite */
     DEV_ACTUATOR_RELAY,         /* digitalWrite (inverted flag) */
     DEV_ACTUATOR_PWM,           /* analogWrite 0-255 */
     DEV_ACTUATOR_RGB_LED,       /* rgbLedWrite packed 0xRRGGBB */
     DEV_ACTUATOR_SSD1306,       /* SSD1306 OLED display (text via template) */
+    DEV_ACTUATOR_SH1106,        /* SH1106 OLED display (text via template, 2-col offset) */
 };
 
 struct Device {
@@ -177,6 +183,9 @@ bool serialTextActive();
 
 /* Returns true if the rgb_led device is set to a non-zero color (suppresses heartbeat) */
 bool rgbLedOverride();
+
+/* Check if a DeviceKind is a display actuator (SSD1306 or SH1106) */
+bool deviceIsDisplay(DeviceKind kind);
 
 /* Check if a DeviceKind is an I2C sensor type */
 bool deviceIsI2c(DeviceKind kind);

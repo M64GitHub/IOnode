@@ -221,6 +221,10 @@ ionode read ionode-01 light                 # → 67.2
 | `i2c_bh1750` | BH1750 ambient light (lux) |
 | `i2c_sht31` | SHT31 temp/humidity, channel via pin 0/1 |
 | `i2c_ads1115` | ADS1115 16-bit ADC, channel via pin 0-3 |
+| `dht11_temp` | DHT11 temperature (integer, 0–50°C) |
+| `dht11_humi` | DHT11 humidity (integer, 20–80% RH) |
+| `dht22_temp` | DHT22 temperature (0.1° resolution, -40–80°C) |
+| `dht22_humi` | DHT22 humidity (0.1° resolution, 0–100% RH) |
 
 **Actuators:**
 
@@ -231,6 +235,7 @@ ionode read ionode-01 light                 # → 67.2
 | `pwm` | analogWrite 0-255 |
 | `rgb_led` | Built-in RGB LED, packed 0xRRGGBB value |
 | `ssd1306` | SSD1306 OLED text display, template-driven |
+| `sh1106` | SH1106 OLED text display, template-driven |
 
 ### Pre-registered Devices (always available)
 - `chip_temp` - internal chip temperature in °C
@@ -418,6 +423,8 @@ ionode device add <dev> light i2c_bh1750 --unit lux --i2c-addr 35
 
 # SSD1306 OLED display
 ionode device add <dev> display ssd1306 0 --i2c-addr 60 --template "T:{bme_temp}C H:{bme_humi}%"
+# SH1106 OLED display (most cheap modules use this controller)
+ionode device add <dev> display sh1106 0 --i2c-addr 60 --template "T:{bme_temp}C H:{bme_humi}%"
 ionode write <dev> display "!Hello World"       # raw text (! prefix)
 ```
 

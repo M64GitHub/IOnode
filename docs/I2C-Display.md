@@ -1,19 +1,21 @@
-# I2C Display (SSD1306 OLED)
+# I2C Display (SSD1306 / SH1106 OLED)
 
-IOnode can drive SSD1306 OLED displays over I2C. These tiny displays (128x64 or 128x32 pixels) cost a few dollars and show live sensor readings, system status, or any text you send. IOnode includes a built-in text renderer and a template system that auto-refreshes every 5 seconds with live data.
+IOnode can drive SSD1306 and SH1106 OLED displays over I2C. These tiny displays (128x64 or 128x32 pixels) cost a few dollars and show live sensor readings, system status, or any text you send. IOnode includes a built-in text renderer and a template system that auto-refreshes every 5 seconds with live data.
 
 No libraries needed, no code to write. Wire it, register it, see data on screen.
+
+> **SSD1306 vs SH1106:** Most cheap OLED modules from Amazon/AliExpress use the SH1106 controller, not the SSD1306. They look identical and share the same I2C address (0x3C). If your display shows random pixels or garbled text with the `ssd1306` kind, try `sh1106` instead.
 
 ---
 
 ## What You Need
 
 - An ESP32 board running IOnode (any supported chip)
-- An SSD1306 OLED display module (128x64 or 128x32, I2C version)
+- An SSD1306 or SH1106 OLED display module (128x64 or 128x32, I2C version)
 - 4 jumper wires (VCC, GND, SDA, SCL)
 - The `ionode` CLI installed ([setup guide](SETUP.md))
 
-> **Important:** Get the **I2C** version of the SSD1306 (4 pins: VCC, GND, SDA, SCL), not the SPI version (7 pins). The I2C modules are the most common ones sold on Amazon, AliExpress, etc.
+> **Important:** Get the **I2C** version (4 pins: VCC, GND, SDA, SCL), not the SPI version (7 pins). The I2C modules are the most common ones sold on Amazon, AliExpress, etc.
 
 ---
 
@@ -41,9 +43,9 @@ SDA and SCL pins per chip:
 
 See the [I2C Sensors Guide](I2C-Sensors.md) for detailed wiring diagrams.
 
-### SSD1306 I2C Address
+### I2C Address
 
-Most SSD1306 modules use address **0x3C (decimal 60)**. Some use 0x3D (decimal 61). Run `ionode i2c <node> scan` to check.
+Both SSD1306 and SH1106 modules typically use address **0x3C (decimal 60)**. Some use 0x3D (decimal 61). Run `ionode i2c <node> scan` to check.
 
 ---
 
@@ -66,10 +68,14 @@ You should see address `60` (or `61`) in the results.
 ### 3. Register the display
 
 ```bash
+# SSD1306 controller
 ionode device add ionode-01 display ssd1306 0 --i2c-addr 60
+
+# SH1106 controller (most cheap modules)
+ionode device add ionode-01 display sh1106 0 --i2c-addr 60
 ```
 
-This registers a 128x64 display (pin `0` = 128x64) at address 60 named `display`.
+This registers a 128x64 display (pin `0` = 128x64) at address 60 named `display`. Use `sh1106` if your display shows garbled output with `ssd1306`.
 
 ### 4. Send text
 
@@ -377,6 +383,7 @@ The `/api/devices/display` REST endpoint provides programmatic access.
 
 ## See Also
 
+- [DHT Sensors Guide](DHT-Sensors.md) - DHT11, DHT22, AM2303 temperature/humidity sensors
 - [I2C Sensors Guide](I2C-Sensors.md) - Wiring, sensor setup, all supported I2C sensors
 - [CLI Reference](CLI.md) - `ionode device add`, `ionode write`, `ionode i2c`
 - [NATS API Reference](NATS-API.md) - I2C HAL subjects, device.add payload format

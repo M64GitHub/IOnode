@@ -1177,7 +1177,9 @@ function detailRow(label, value) {
 
 function isSensorKind(kind) {
   return ['digital_in','analog_in','ntc_10k','ldr','internal_temp',
-          'clock_hour','clock_minute','clock_hhmm','nats_value','serial_text'].includes(kind);
+          'clock_hour','clock_minute','clock_hhmm','nats_value','serial_text',
+          'i2c_generic','i2c_bme280','i2c_bh1750','i2c_sht31','i2c_ads1115',
+          'dht11_temp','dht11_humi','dht22_temp','dht22_humi'].includes(kind);
 }
 
 function formatUptime(secs) {

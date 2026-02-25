@@ -1,6 +1,6 @@
-# IOnode v0.3.0 - I2C Sensors & OLED Display
+# IOnode v0.3.0 - I2C Sensors, OLED Displays & DHT
 
-I2C support unlocks the largest sensor ecosystem and OLED displays. Five sensor drivers, a text display, and raw bus access - all manageable via NATS, CLI, and web UI.
+I2C support unlocks the largest sensor ecosystem and OLED displays. Five I2C sensor drivers, DHT11/DHT22 temperature and humidity sensors, SSD1306/SH1106 OLED displays, and raw bus access - all manageable via NATS, CLI, and web UI.
 
 ---
 
@@ -40,13 +40,41 @@ Reads register `pin` (0-255) from `i2c_addr`, combines bytes big-endian, multipl
 
 ---
 
-## SSD1306 OLED Display
+## DHT11/DHT22 Temperature & Humidity
 
-128x64 and 128x32 OLED displays as actuator devices. Text-only with built-in 5x7 font (21 chars per line).
+Bit-banged GPIO driver for DHT11 and DHT22 (AM2302) sensors. No external libraries — hand-rolled timing with critical section protection (~4ms read window).
+
+| Kind | Sensor | Description |
+|------|--------|-------------|
+| `dht11_temp` | DHT11 | Temperature, integer resolution, 0–50°C |
+| `dht11_humi` | DHT11 | Humidity, integer resolution, 20–80% RH |
+| `dht22_temp` | DHT22 | Temperature, 0.1° resolution, -40–80°C |
+| `dht22_humi` | DHT22 | Humidity, 0.1% resolution, 0–100% RH |
+
+Register one device per reading (temperature and humidity are separate device kinds):
 
 ```bash
-ionode device add ionode-01 display ssd1306 0 --i2c-addr 60 --template "T:{bme_temp}C H:{bme_humi}%\nP:{bme_pres}hPa"
+ionode device add ionode-01 room_temp dht22_temp 4 --unit C
+ionode device add ionode-01 room_humi dht22_humi 4 --unit %
 ```
+
+Two devices on the same GPIO pin share a per-pin reading cache (2-second TTL), so only one physical read occurs per interval regardless of how many channel devices are registered. GPIO is configured as `INPUT_PULLUP` on registration.
+
+---
+
+## SSD1306 / SH1106 OLED Display
+
+128x64 and 128x32 OLED displays as actuator devices. Text-only with built-in 5x7 font (21 chars per line). Both SSD1306 and SH1106 controllers are supported — most cheap modules from Amazon/AliExpress use SH1106.
+
+```bash
+# SSD1306 controller
+ionode device add ionode-01 display ssd1306 0 --i2c-addr 60 --template "T:{bme_temp}C H:{bme_humi}%\nP:{bme_pres}hPa"
+
+# SH1106 controller (most cheap modules)
+ionode device add ionode-01 display sh1106 0 --i2c-addr 60 --template "T:{bme_temp}C H:{bme_humi}%\nP:{bme_pres}hPa"
+```
+
+SH1106 uses a 2-column RAM offset (132-column RAM vs 128 visible pixels); the driver handles this automatically. Both use page addressing and share the same text rendering, template engine, and 5x7 font.
 
 ### Template System
 
@@ -60,10 +88,11 @@ Templates auto-refresh every 5 seconds. `{device_name}` tokens are replaced with
 | `{uptime}` | Uptime string (e.g. `1d 4h`) |
 | `{name}` | Device name |
 
-Raw text (no interpolation) can be sent via NATS with `!` prefix:
+Raw text (no interpolation) can be sent via NATS with `!` prefix. Use `\n` for line breaks in both raw text and templates:
 
 ```bash
 ionode write ionode-01 display "!Hello World"
+ionode write ionode-01 display "!Line 1\nLine 2\nLine 3"
 ```
 
 ### Display Sizes
@@ -116,12 +145,13 @@ Bus is reference-counted: initialized on first I2C device registration, deinitia
 
 ## Web UI Updates
 
-- **I2C device types** in the Add Device dropdown (i2c_bme280, i2c_bh1750, i2c_sht31, i2c_ads1115, i2c_generic, ssd1306)
+- **I2C device types** in the Add Device dropdown (i2c_bme280, i2c_bh1750, i2c_sht31, i2c_ads1115, i2c_generic, ssd1306, sh1106)
+- **DHT device types** in the Add Device dropdown (dht11_temp, dht11_humi, dht22_temp, dht22_humi)
 - **I2C form fields** - address, channel, unit, template, generic settings (register, length, scale)
 - **I2C scan** button - scans the bus and shows detected addresses
-- **SSD1306 control card** - text input with send and clear buttons
+- **Display control card** - text input with send and clear buttons (SSD1306 and SH1106)
 - **`/api/i2c/scan`** endpoint - returns detected I2C addresses
-- **`/api/devices/display`** endpoint - send text to SSD1306 displays
+- **`/api/devices/display`** endpoint - send text to OLED displays
 
 ---
 
@@ -136,14 +166,19 @@ Bus is reference-counted: initialized on first I2C device registration, deinitia
 | `i2c_bh1750` | sensor | BH1750 ambient light (lux) |
 | `i2c_sht31` | sensor | SHT31 temperature/humidity |
 | `i2c_ads1115` | sensor | ADS1115 16-bit ADC |
+| `dht11_temp` | sensor | DHT11 temperature |
+| `dht11_humi` | sensor | DHT11 humidity |
+| `dht22_temp` | sensor | DHT22 temperature |
+| `dht22_humi` | sensor | DHT22 humidity |
 | `ssd1306` | actuator | SSD1306 OLED text display |
+| `sh1106` | actuator | SH1106 OLED text display |
 
 ### New Persistence Fields
 
 | JSON Key | Field | Description |
 |----------|-------|-------------|
 | `ia` | `i2c_addr` | I2C slave address (0-127) |
-| `dt` | `disp_template` | Display template string (SSD1306) |
+| `dt` | `disp_template` | Display template string (SSD1306/SH1106) |
 | `rl` | `i2c_reg_len` | Register read length for i2c_generic (1 or 2) |
 | `sc` | `i2c_scale` | Scale multiplier for i2c_generic |
 
@@ -162,8 +197,11 @@ Bus is reference-counted: initialized on first I2C device registration, deinitia
 | File | Purpose |
 |------|---------|
 | `include/i2c_devices.h` | I2C subsystem header |
+| `include/dht_driver.h` | DHT11/DHT22 driver header |
 | `src/i2c_devices.cpp` | I2C bus management + BME280/BH1750/SHT31/ADS1115/generic drivers |
-| `src/i2c_display.cpp` | SSD1306 OLED driver + template engine + 5x7 font |
+| `src/i2c_display.cpp` | SSD1306/SH1106 OLED driver + template engine + 5x7 font |
+| `src/dht_driver.cpp` | DHT11/DHT22 bit-bang driver with per-pin read cache |
+| `docs/I2C-Display.md` | OLED display guide (wiring, templates, raw text, worked examples) |
 
 ## Files Modified
 

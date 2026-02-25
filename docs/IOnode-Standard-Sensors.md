@@ -403,6 +403,7 @@ The on-device web UI at `http://{device-ip}/` supports all standard sensor types
 ## See Also
 
 - [GPIO & Actuators Guide](GPIO.md) - Raw GPIO, ADC, PWM, relays, digital I/O
+- [DHT Sensors Guide](DHT-Sensors.md) - DHT11, DHT22, AM2303 temperature/humidity sensors
 - [I2C Sensors Guide](I2C-Sensors.md) - BME280, BH1750, SHT31, ADS1115
 - [I2C Display Guide](I2C-Display.md) - SSD1306 OLED display
 - [CLI Reference](CLI.md) - All CLI commands including `ionode device add` and `ionode event set`

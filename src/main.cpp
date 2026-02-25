@@ -817,7 +817,7 @@ void loop() {
     /* Keep sensor EMA values warm (every 10s) + history (every 5min) */
     sensorsPoll();
 
-    /* Refresh SSD1306 display templates (every 5s) */
+    /* Refresh SSD1306 display templates (every 2s) */
     displayPoll();
 
     /* Check event thresholds every 1 second */

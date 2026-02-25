@@ -263,7 +263,7 @@ $ ionode i2c ionode-01 scan
 
   ADDR    HEX      COMMON DEVICE
 ────────────────────────────────────────
-  60      0x3C     SSD1306 OLED
+  60      0x3C     SSD1306/SH1106 OLED
   104     0x68     DS3231 / MPU6050
   118     0x76     BME280
 
@@ -378,7 +378,7 @@ Options:
 - `--nats <subject>` - NATS subject (for `nats_value` kind)
 - `--i2c-addr <A>` - I2C slave address (decimal, for I2C kinds)
 - `--channel <C>` - channel selector (sets pin; for multi-value I2C sensors)
-- `--template <T>` - display template (for `ssd1306` kind)
+- `--template <T>` - display template (for `ssd1306`/`sh1106` kinds)
 - `--reg-len <N>` - register read length, 1 or 2 (for `i2c_generic`)
 - `--scale <F>` - scale multiplier (for `i2c_generic`)
 
@@ -394,6 +394,9 @@ $ ionode device add ionode-01 bme_temp i2c_bme280 --channel 0 --unit C --i2c-add
 
 $ ionode device add ionode-01 display ssd1306 0 --i2c-addr 60 --template "T:{bme_temp}C"
   +  display  ssd1306  I2C 0x3C
+
+$ ionode device add ionode-01 display sh1106 0 --i2c-addr 60 --template "T:{bme_temp}C"
+  +  display  sh1106  I2C 0x3C
 ```
 
 **NATS:** `{name}.config.device.add`

@@ -471,6 +471,7 @@ I2C sensors show up in the device list and display live readings just like any o
 
 ## See Also
 
+- [DHT Sensor Guide](DHT-Sensors.md) - DHT11, DHT22, and AM2303 temperature/humidity sensors
 - [I2C Display Guide](I2C-Display.md) - SSD1306 OLED display setup and templates
 - [CLI Reference](CLI.md) - All CLI commands including `ionode i2c` and `ionode device add`
 - [NATS API Reference](NATS-API.md) - I2C HAL subjects and device.add payload format

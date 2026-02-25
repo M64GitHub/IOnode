@@ -6,6 +6,7 @@
 #include "devices.h"
 #include "nats_hal.h"
 #include "i2c_devices.h"
+#include "dht_driver.h"
 #include <nats_atoms.h>
 #include <LittleFS.h>
 #if !defined(CONFIG_IDF_TARGET_ESP32)
@@ -29,16 +30,20 @@ void devicesMarkDirty() {
  *============================================================================*/
 
 bool deviceIsSensor(DeviceKind kind) {
-    return kind <= DEV_SENSOR_I2C_ADS1115;
+    return kind <= DEV_SENSOR_DHT22_HUMI;
 }
 
 bool deviceIsActuator(DeviceKind kind) {
     return kind >= DEV_ACTUATOR_DIGITAL;
 }
 
+bool deviceIsDisplay(DeviceKind kind) {
+    return kind == DEV_ACTUATOR_SSD1306 || kind == DEV_ACTUATOR_SH1106;
+}
+
 bool deviceIsI2c(DeviceKind kind) {
     return (kind >= DEV_SENSOR_I2C_GENERIC && kind <= DEV_SENSOR_I2C_ADS1115) ||
-           kind == DEV_ACTUATOR_SSD1306;
+           kind == DEV_ACTUATOR_SSD1306 || kind == DEV_ACTUATOR_SH1106;
 }
 
 const char *deviceKindName(DeviceKind kind) {
@@ -58,11 +63,16 @@ const char *deviceKindName(DeviceKind kind) {
         case DEV_SENSOR_I2C_BH1750:    return "i2c_bh1750";
         case DEV_SENSOR_I2C_SHT31:     return "i2c_sht31";
         case DEV_SENSOR_I2C_ADS1115:   return "i2c_ads1115";
+        case DEV_SENSOR_DHT11_TEMP:    return "dht11_temp";
+        case DEV_SENSOR_DHT11_HUMI:    return "dht11_humi";
+        case DEV_SENSOR_DHT22_TEMP:    return "dht22_temp";
+        case DEV_SENSOR_DHT22_HUMI:    return "dht22_humi";
         case DEV_ACTUATOR_DIGITAL:     return "digital_out";
         case DEV_ACTUATOR_RELAY:       return "relay";
         case DEV_ACTUATOR_PWM:         return "pwm";
         case DEV_ACTUATOR_RGB_LED:     return "rgb_led";
         case DEV_ACTUATOR_SSD1306:     return "ssd1306";
+        case DEV_ACTUATOR_SH1106:      return "sh1106";
         default:                       return "unknown";
     }
 }
@@ -83,11 +93,16 @@ static DeviceKind kindFromString(const char *s) {
     if (strcmp(s, "i2c_bh1750") == 0)    return DEV_SENSOR_I2C_BH1750;
     if (strcmp(s, "i2c_sht31") == 0)     return DEV_SENSOR_I2C_SHT31;
     if (strcmp(s, "i2c_ads1115") == 0)   return DEV_SENSOR_I2C_ADS1115;
+    if (strcmp(s, "dht11_temp") == 0)    return DEV_SENSOR_DHT11_TEMP;
+    if (strcmp(s, "dht11_humi") == 0)    return DEV_SENSOR_DHT11_HUMI;
+    if (strcmp(s, "dht22_temp") == 0)    return DEV_SENSOR_DHT22_TEMP;
+    if (strcmp(s, "dht22_humi") == 0)    return DEV_SENSOR_DHT22_HUMI;
     if (strcmp(s, "digital_out") == 0)   return DEV_ACTUATOR_DIGITAL;
     if (strcmp(s, "relay") == 0)         return DEV_ACTUATOR_RELAY;
     if (strcmp(s, "pwm") == 0)           return DEV_ACTUATOR_PWM;
     if (strcmp(s, "rgb_led") == 0)      return DEV_ACTUATOR_RGB_LED;
     if (strcmp(s, "ssd1306") == 0)      return DEV_ACTUATOR_SSD1306;
+    if (strcmp(s, "sh1106") == 0)       return DEV_ACTUATOR_SH1106;
     return DEV_SENSOR_DIGITAL;
 }
 
@@ -169,11 +184,19 @@ bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
             /* Initialize I2C bus for I2C devices */
             if (deviceIsI2c(kind) && i2c_addr > 0) {
                 i2cInit();
-                /* Initialize SSD1306 display */
-                if (kind == DEV_ACTUATOR_SSD1306) {
+                /* Initialize OLED display (SSD1306 or SH1106) */
+                if (deviceIsDisplay(kind)) {
                     uint8_t height = (pin == 1) ? 32 : 64;
-                    ssd1306Init(i2c_addr, height);
+                    uint8_t col_offset = (kind == DEV_ACTUATOR_SH1106) ? 2 : 0;
+                    ssd1306Init(i2c_addr, height, col_offset);
                 }
+            }
+
+            /* Configure GPIO for DHT sensors */
+            if ((kind == DEV_SENSOR_DHT11_TEMP || kind == DEV_SENSOR_DHT11_HUMI ||
+                 kind == DEV_SENSOR_DHT22_TEMP || kind == DEV_SENSOR_DHT22_HUMI) &&
+                pin != PIN_NONE) {
+                pinMode(pin, INPUT_PULLUP);
             }
 
             /* Configure GPIO for non-I2C actuators */
@@ -194,11 +217,16 @@ bool deviceRemove(const char *name) {
         serialTextDeinit();
     }
     if (deviceIsI2c(dev->kind) && dev->i2c_addr > 0) {
-        if (dev->kind == DEV_ACTUATOR_SSD1306) {
-            ssd1306Deinit(dev->i2c_addr);
+        if (deviceIsDisplay(dev->kind)) {
+            uint8_t col_offset = (dev->kind == DEV_ACTUATOR_SH1106) ? 2 : 0;
+            ssd1306Deinit(dev->i2c_addr, col_offset);
         }
         i2cCacheInvalidate(dev->i2c_addr);
         i2cDeinit();
+    }
+    if (dev->kind == DEV_SENSOR_DHT11_TEMP || dev->kind == DEV_SENSOR_DHT11_HUMI ||
+        dev->kind == DEV_SENSOR_DHT22_TEMP || dev->kind == DEV_SENSOR_DHT22_HUMI) {
+        dhtCacheInvalidate(dev->pin);
     }
     dev->used = false;
     dev->name[0] = '\0';
@@ -328,6 +356,26 @@ float deviceReadSensor(Device *dev, bool record_hist) {
             record_history = true;
             break;
 
+        case DEV_SENSOR_DHT11_TEMP:
+            result = dhtRead(dev->pin, false, DHT_CHAN_TEMP);
+            record_history = true;
+            break;
+
+        case DEV_SENSOR_DHT11_HUMI:
+            result = dhtRead(dev->pin, false, DHT_CHAN_HUMI);
+            record_history = true;
+            break;
+
+        case DEV_SENSOR_DHT22_TEMP:
+            result = dhtRead(dev->pin, true, DHT_CHAN_TEMP);
+            record_history = true;
+            break;
+
+        case DEV_SENSOR_DHT22_HUMI:
+            result = dhtRead(dev->pin, true, DHT_CHAN_HUMI);
+            record_history = true;
+            break;
+
         default:
             break;
     }
@@ -392,6 +440,16 @@ bool deviceSetActuator(Device *dev, int value) {
             } else if (dev->disp_template[0]) {
                 uint8_t height = (dev->pin == 1) ? 32 : 64;
                 ssd1306RenderTemplate(dev->i2c_addr, dev->disp_template, height);
+            }
+            return true;
+
+        case DEV_ACTUATOR_SH1106:
+            /* value=0 clears display, value=1 refreshes template */
+            if (value == 0) {
+                ssd1306Clear(dev->i2c_addr, 2);
+            } else if (dev->disp_template[0]) {
+                uint8_t height = (dev->pin == 1) ? 32 : 64;
+                ssd1306RenderTemplate(dev->i2c_addr, dev->disp_template, height, 2);
             }
             return true;
 
@@ -650,8 +708,23 @@ static void devicesLoad() {
         const char *obj = strchr(p, '{');
         if (!obj) break;
 
-        /* Find end of object */
-        const char *obj_end = strchr(obj, '}');
+        /* Find closing '}', skipping over quoted strings so that
+           template tokens like {name} don't confuse the parser */
+        const char *obj_end = nullptr;
+        {
+            const char *q = obj + 1;
+            bool in_str = false;
+            while (*q) {
+                if (in_str) {
+                    if (*q == '\\' && q[1]) { q += 2; continue; }
+                    if (*q == '"') in_str = false;
+                } else {
+                    if (*q == '"') in_str = true;
+                    else if (*q == '}') { obj_end = q; break; }
+                }
+                q++;
+            }
+        }
         if (!obj_end) break;
 
         /* Extract into a temporary null-terminated substring */
@@ -728,11 +801,12 @@ static void devicesLoad() {
 void devicesClear() {
     /* Deinit serial_text if active */
     if (serialTextActive()) serialTextDeinit();
-    /* Deinit SSD1306 displays and I2C bus */
+    /* Deinit OLED displays and I2C bus */
     for (int i = 0; i < MAX_DEVICES; i++) {
         if (g_devices[i].used && deviceIsI2c(g_devices[i].kind) && g_devices[i].i2c_addr > 0) {
-            if (g_devices[i].kind == DEV_ACTUATOR_SSD1306) {
-                ssd1306Deinit(g_devices[i].i2c_addr);
+            if (deviceIsDisplay(g_devices[i].kind)) {
+                uint8_t col_offset = (g_devices[i].kind == DEV_ACTUATOR_SH1106) ? 2 : 0;
+                ssd1306Deinit(g_devices[i].i2c_addr, col_offset);
             }
             i2cDeinit();
         }
@@ -899,6 +973,10 @@ void sensorsPoll() {
 
         if (d->kind == DEV_SENSOR_NTC_10K && do_ntc)
             ntcReadWithWarmup(d);           /* warmup + delay + read → cached */
+
+        /* Refresh DHT cache every 5s (only on _temp variants to avoid double-reads) */
+        if (do_ntc && (d->kind == DEV_SENSOR_DHT11_TEMP || d->kind == DEV_SENSOR_DHT22_TEMP))
+            deviceReadSensor(d);
 
         if (do_hist)
             deviceReadSensor(d, true);      /* all sensors: record history every 5min */

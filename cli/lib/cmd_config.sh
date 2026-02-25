@@ -278,7 +278,7 @@ cmd_device_add() {
         if [[ "$ok" == "true" ]]; then
             local kind_color="c_sensor"
             case "$kind" in
-                digital_out|relay|pwm|rgb_led|ssd1306) kind_color="c_actuator" ;;
+                digital_out|relay|pwm|rgb_led|ssd1306|sh1106) kind_color="c_actuator" ;;
             esac
             local desc="pin $pin"
             if [[ -n "$i2c_addr" ]]; then

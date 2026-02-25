@@ -11,7 +11,7 @@ Flash it, name it, point it at a NATS server - done. Read sensors from a script,
 
 **Supported chips:** ESP32-C6 · ESP32-S3 · ESP32-C3 · ESP32
 
-**Supports:** GPIO · ADC · PWM · Relays · NTC & LDR sensors · I2C (BME280, BH1750, SHT31, ADS1115) · SSD1306 OLED display · RGB LED · UART
+**Supports:** GPIO · ADC · PWM · Relays · NTC & LDR sensors · DHT11 & DHT22 · I2C (BME280, BH1750, SHT31, ADS1115) · SSD1306/SH1106 OLED display · RGB LED · UART
 
 ```
 Your laptop / server / Raspberry Pi
@@ -101,7 +101,8 @@ A temperature sensor, an OLED display, and a threshold alert - in four commands.
 # 1. Register an NTC 10K thermistor on pin 2
 ionode device add ionode-01 room_temp ntc_10k 2 --unit C
 
-# 2. Register an SSD1306 OLED display (I2C address 60 = 0x3C)
+# 2. Register an OLED display (I2C address 60 = 0x3C)
+#    Use ssd1306 or sh1106 depending on your display controller
 ionode device add ionode-01 display ssd1306 0 \
   --i2c-addr 60 --template "Hello World!\n{room_temp}C"
 
@@ -126,6 +127,7 @@ All device types, wiring options, and configuration details are described in the
 | [Setup Guide](docs/SETUP.md) | NATS server installation, CLI setup, dashboard, network architecture |
 | [GPIO & Actuators](docs/GPIO.md) | Digital I/O, relays, PWM, RGB LEDs - wiring, registration, persistence |
 | [Standard Sensors](docs/IOnode-Standard-Sensors.md) | NTC thermistors, LDR light sensors, internal temperature - wiring and calibration |
+| [DHT Sensors](docs/DHT-Sensors.md) | DHT11, DHT22, AM2303 - wiring, pull-up resistors, single-wire setup |
 | [I2C Sensors](docs/I2C-Sensors.md) | BME280, BH1750, SHT31, ADS1115, generic I2C - pin maps, multi-channel setup |
 | [I2C Display](docs/I2C-Display.md) | SSD1306 OLED - template engine, token reference, raw text mode |
 | [CLI Reference](docs/CLI.md) | All commands with examples, global options, NATS subject mapping |
@@ -310,9 +312,9 @@ Complete protocol specification with payload formats, error handling, and CLI ma
 
 ## Device Kinds
 
-**Sensors:** `digital_in` · `analog_in` · `ntc_10k` · `ldr` · `internal_temp` · `clock_hour` · `clock_minute` · `clock_hhmm` · `nats_value` · `serial_text` · `i2c_generic` · `i2c_bme280` · `i2c_bh1750` · `i2c_sht31` · `i2c_ads1115`
+**Sensors:** `digital_in` · `analog_in` · `ntc_10k` · `ldr` · `internal_temp` · `clock_hour` · `clock_minute` · `clock_hhmm` · `nats_value` · `serial_text` · `i2c_generic` · `i2c_bme280` · `i2c_bh1750` · `i2c_sht31` · `i2c_ads1115` · `dht11_temp` · `dht11_humi` · `dht22_temp` · `dht22_humi`
 
-**Actuators:** `digital_out` · `relay` · `pwm` · `rgb_led` · `ssd1306`
+**Actuators:** `digital_out` · `relay` · `pwm` · `rgb_led` · `ssd1306` · `sh1106`
 
 Full reference with descriptions: [Supported Device Kinds](docs/NATS-API.md#supported-device-kinds)
 

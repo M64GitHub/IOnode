@@ -495,6 +495,7 @@ The on-device web UI at `http://{device-ip}/` supports all device types:
 ## See Also
 
 - [Standard Sensors Guide](IOnode-Standard-Sensors.md) - NTC thermistor, LDR, internal temperature
+- [DHT Sensors Guide](DHT-Sensors.md) - DHT11, DHT22, AM2303 temperature/humidity sensors
 - [I2C Sensors Guide](I2C-Sensors.md) - BME280, BH1750, SHT31, ADS1115
 - [I2C Display Guide](I2C-Display.md) - SSD1306 OLED display
 - [CLI Reference](CLI.md) - All CLI commands

@@ -181,6 +181,11 @@ static void cfgDeviceAdd(nats_client_t *client, const nats_msg_t *msg,
     else if (strcmp(kind_str, "i2c_sht31") == 0)   kind = DEV_SENSOR_I2C_SHT31;
     else if (strcmp(kind_str, "i2c_ads1115") == 0)  kind = DEV_SENSOR_I2C_ADS1115;
     else if (strcmp(kind_str, "ssd1306") == 0)     kind = DEV_ACTUATOR_SSD1306;
+    else if (strcmp(kind_str, "sh1106") == 0)      kind = DEV_ACTUATOR_SH1106;
+    else if (strcmp(kind_str, "dht11_temp") == 0)  kind = DEV_SENSOR_DHT11_TEMP;
+    else if (strcmp(kind_str, "dht11_humi") == 0)  kind = DEV_SENSOR_DHT11_HUMI;
+    else if (strcmp(kind_str, "dht22_temp") == 0)  kind = DEV_SENSOR_DHT22_TEMP;
+    else if (strcmp(kind_str, "dht22_humi") == 0)  kind = DEV_SENSOR_DHT22_HUMI;
     else {
         cfgError(client, msg, "unknown_kind", kind_str);
         return;

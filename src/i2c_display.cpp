@@ -1,9 +1,10 @@
 /**
  * @file i2c_display.cpp
- * @brief SSD1306 OLED display driver — text-only with 5x7 font + template engine
+ * @brief OLED display driver (SSD1306/SH1106) — text-only with 5x7 font + template engine
  *
  * Raw Wire.h communication, no external libraries.
  * Supports 128x64 (8 lines) and 128x32 (4 lines), 21 chars per line.
+ * Both SSD1306 and SH1106 use page addressing. SH1106 needs a 2-column offset.
  * Template engine replaces {device_name} tokens with live sensor readings.
  */
 
@@ -140,10 +141,10 @@ static void ssd1306CmdList(uint8_t addr, const uint8_t *cmds, uint8_t len) {
  * SSD1306 Init / Deinit
  *============================================================================*/
 
-bool ssd1306Init(uint8_t addr, uint8_t height) {
+bool ssd1306Init(uint8_t addr, uint8_t height, uint8_t col_offset) {
     if (!i2cActive()) return false;
     if (!i2cDetect(addr)) {
-        Serial.printf("SSD1306: not found at 0x%02X\n", addr);
+        Serial.printf("OLED: not found at 0x%02X\n", addr);
         return false;
     }
 
@@ -162,7 +163,8 @@ bool ssd1306Init(uint8_t addr, uint8_t height) {
     ssd1306Cmd(addr, 0xD3); ssd1306Cmd(addr, 0x00); /* display offset = 0 */
     ssd1306Cmd(addr, 0x40);                          /* start line = 0 */
     ssd1306Cmd(addr, 0x8D); ssd1306Cmd(addr, 0x14); /* charge pump enable */
-    ssd1306Cmd(addr, 0x20); ssd1306Cmd(addr, 0x00); /* horizontal addressing */
+    delay(100);                                      /* charge pump stabilization */
+    /* Page addressing used for both SSD1306 and SH1106 compatibility */
     ssd1306Cmd(addr, 0xA1);                          /* segment remap (flip X) */
     ssd1306Cmd(addr, 0xC8);                          /* COM scan reverse (flip Y) */
     ssd1306Cmd(addr, 0xDA); ssd1306Cmd(addr, com_pins); /* COM pins config */
@@ -171,34 +173,43 @@ bool ssd1306Init(uint8_t addr, uint8_t height) {
     ssd1306Cmd(addr, 0xDB); ssd1306Cmd(addr, 0x40); /* VCOMH deselect */
     ssd1306Cmd(addr, 0xA4);                          /* display from RAM */
     ssd1306Cmd(addr, 0xA6);                          /* normal display */
-    ssd1306Cmd(addr, 0xAF);                          /* display on */
 
-    ssd1306Clear(addr);
+    ssd1306Clear(addr, col_offset);                  /* clear GDDRAM before display on */
+    ssd1306Cmd(addr, 0xAF);                          /* display on — clean screen */
 
-    Serial.printf("SSD1306: initialized at 0x%02X (%dx%d)\n", addr, 128, height);
+    const char *type = (col_offset > 0) ? "SH1106" : "SSD1306";
+    Serial.printf("%s: initialized at 0x%02X (%dx%d)\n", type, addr, 128, height);
     return true;
 }
 
-void ssd1306Deinit(uint8_t addr) {
+void ssd1306Deinit(uint8_t addr, uint8_t col_offset) {
     if (!i2cActive()) return;
-    ssd1306Clear(addr);
+    ssd1306Clear(addr, col_offset);
     ssd1306Cmd(addr, 0xAE); /* display off */
-    Serial.printf("SSD1306: deinitialized 0x%02X\n", addr);
+    const char *type = (col_offset > 0) ? "SH1106" : "SSD1306";
+    Serial.printf("%s: deinitialized 0x%02X\n", type, addr);
 }
 
-void ssd1306Clear(uint8_t addr) {
+void ssd1306Clear(uint8_t addr, uint8_t col_offset) {
     if (!i2cActive()) return;
 
-    /* Set column and page range to cover full display */
-    ssd1306Cmd(addr, 0x21); ssd1306Cmd(addr, 0); ssd1306Cmd(addr, 127);
-    ssd1306Cmd(addr, 0x22); ssd1306Cmd(addr, 0); ssd1306Cmd(addr, 7);
+    /* SH1106 has 132-column RAM; visible area starts at col_offset.
+       Clear the full 132 columns to avoid ghost pixels. */
+    int total_cols = 128 + col_offset;
 
-    /* Send 128*8 = 1024 zero bytes (Wire has 128-byte buffer, chunk it) */
-    for (int page = 0; page < 8; page++) {
-        for (int chunk = 0; chunk < 128; chunk += 16) {
+    for (uint8_t page = 0; page < 8; page++) {
+        /* Set page and column using page-addressing commands */
+        ssd1306Cmd(addr, 0xB0 | page);                    /* page address */
+        ssd1306Cmd(addr, 0x00 | (col_offset & 0x0F));     /* lower column nibble */
+        ssd1306Cmd(addr, 0x10 | (col_offset >> 4));        /* upper column nibble */
+
+        /* Write zero bytes in 32-byte chunks */
+        for (int chunk = 0; chunk < total_cols; chunk += 32) {
+            int n = total_cols - chunk;
+            if (n > 32) n = 32;
             Wire.beginTransmission(addr);
             Wire.write(0x40); /* data mode */
-            for (int i = 0; i < 16; i++) Wire.write((uint8_t)0x00);
+            for (int i = 0; i < n; i++) Wire.write((uint8_t)0x00);
             Wire.endTransmission();
         }
     }
@@ -210,12 +221,13 @@ void ssd1306Clear(uint8_t addr) {
 
 #define SSD1306_MAX_COLS 21  /* 128 / 6 = 21 chars (5 pixel + 1 spacing) */
 
-void ssd1306WriteText(uint8_t addr, uint8_t line, const char *text) {
+void ssd1306WriteText(uint8_t addr, uint8_t line, const char *text, uint8_t col_offset) {
     if (!i2cActive()) return;
 
-    /* Set cursor to start of line (page) */
-    ssd1306Cmd(addr, 0x21); ssd1306Cmd(addr, 0); ssd1306Cmd(addr, 127);
-    ssd1306Cmd(addr, 0x22); ssd1306Cmd(addr, line); ssd1306Cmd(addr, line);
+    /* Set cursor to start of line using page addressing (compatible with both SSD1306 and SH1106) */
+    ssd1306Cmd(addr, 0xB0 | line);                    /* page address */
+    ssd1306Cmd(addr, 0x00 | (col_offset & 0x0F));     /* lower column nibble */
+    ssd1306Cmd(addr, 0x10 | (col_offset >> 4));        /* upper column nibble */
 
     /* Render up to 21 characters */
     int col = 0;
@@ -300,12 +312,27 @@ static void templateExpand(const char *tmpl, char *out, int out_len) {
     out[w] = '\0';
 }
 
-void ssd1306RenderTemplate(uint8_t addr, const char *tmpl, uint8_t height) {
+/* In-place unescape: convert literal \n (two chars) to real newline (0x0A) */
+static void unescapeNewlines(char *s) {
+    char *r = s, *w = s;
+    while (*r) {
+        if (r[0] == '\\' && r[1] == 'n') {
+            *w++ = '\n';
+            r += 2;
+        } else {
+            *w++ = *r++;
+        }
+    }
+    *w = '\0';
+}
+
+void ssd1306RenderTemplate(uint8_t addr, const char *tmpl, uint8_t height, uint8_t col_offset) {
     if (!i2cActive() || !tmpl || !tmpl[0]) return;
 
     /* Expand template tokens */
     char expanded[256];
     templateExpand(tmpl, expanded, sizeof(expanded));
+    unescapeNewlines(expanded);
 
     int max_lines = (height == 32) ? 4 : 8;
 
@@ -318,7 +345,7 @@ void ssd1306RenderTemplate(uint8_t addr, const char *tmpl, uint8_t height) {
         char *nl = strchr(line_start, '\n');
         if (nl) *nl = '\0';
 
-        ssd1306WriteText(addr, line_num, line_start);
+        ssd1306WriteText(addr, line_num, line_start, col_offset);
         line_num++;
 
         if (nl) line_start = nl + 1;
@@ -327,29 +354,35 @@ void ssd1306RenderTemplate(uint8_t addr, const char *tmpl, uint8_t height) {
 
     /* Clear remaining lines */
     while (line_num < max_lines) {
-        ssd1306WriteText(addr, line_num, "");
+        ssd1306WriteText(addr, line_num, "", col_offset);
         line_num++;
     }
 }
 
 /*============================================================================
- * Display Poll — refresh all SSD1306 displays
+ * Display Poll — refresh all OLED displays (SSD1306 + SH1106)
  *============================================================================*/
 
+static uint32_t g_disp_last_poll = 0;
+
+void displayPollReset() {
+    g_disp_last_poll = millis();
+}
+
 void displayPoll() {
-    static uint32_t last_poll = 0;
     uint32_t now = millis();
-    if (now - last_poll < 5000) return;
-    last_poll = now;
+    if (now - g_disp_last_poll < 2000) return;
+    g_disp_last_poll = now;
 
     Device *devs = deviceGetAll();
     for (int i = 0; i < MAX_DEVICES; i++) {
         Device *d = &devs[i];
-        if (!d->used || d->kind != DEV_ACTUATOR_SSD1306) continue;
+        if (!d->used || !deviceIsDisplay(d->kind)) continue;
         if (d->i2c_addr == 0) continue;
         if (d->disp_template[0] == '\0') continue;
 
         uint8_t height = (d->pin == 1) ? 32 : 64;
-        ssd1306RenderTemplate(d->i2c_addr, d->disp_template, height);
+        uint8_t col_offset = (d->kind == DEV_ACTUATOR_SH1106) ? 2 : 0;
+        ssd1306RenderTemplate(d->i2c_addr, d->disp_template, height, col_offset);
     }
 }
