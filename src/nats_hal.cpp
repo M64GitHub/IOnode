@@ -11,6 +11,7 @@
 #include <esp_system.h>
 #include "nats_hal.h"
 #include "devices.h"
+#include "i2c_devices.h"
 #include "soc/soc_caps.h"
 #if !defined(CONFIG_IDF_TARGET_ESP32)
 #include "driver/temperature_sensor.h"
@@ -33,7 +34,7 @@ static uint8_t s_pwm_state[SOC_GPIO_PIN_COUNT] = {0};
 
 /* Reserved HAL keywords — cannot be used as device names */
 static const char *HAL_RESERVED[] = {
-    "gpio", "adc", "pwm", "dac", "uart", "system", "device", "config"
+    "gpio", "adc", "pwm", "dac", "uart", "i2c", "system", "device", "config"
 };
 #define HAL_RESERVED_COUNT (sizeof(HAL_RESERVED) / sizeof(HAL_RESERVED[0]))
 
@@ -309,6 +310,152 @@ static void halSystem(nats_client_t *client, const nats_msg_t *msg,
 }
 
 /*============================================================================
+ * Handler: i2c.scan / i2c.{addr}.detect / i2c.{addr}.read / i2c.{addr}.write
+ *============================================================================*/
+
+static void halI2c(nats_client_t *client, const nats_msg_t *msg,
+                   const char *rest, const char *payload) {
+    if (!rest || !*rest) {
+        halError(client, msg, "bad_request",
+                 "i2c.scan, i2c.{addr}.detect, i2c.{addr}.read, i2c.{addr}.write");
+        return;
+    }
+
+    /* i2c.scan — no address needed */
+    if (strcmp(rest, "scan") == 0) {
+        /* Temporarily init I2C if not already active */
+        bool was_active = i2cActive();
+        if (!was_active) i2cInit();
+
+        uint8_t addrs[32];
+        int count = i2cScan(addrs, 32);
+
+        int w = 0;
+        w += snprintf(g_hal_reply, sizeof(g_hal_reply), "[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) g_hal_reply[w++] = ',';
+            w += snprintf(g_hal_reply + w, sizeof(g_hal_reply) - w, "%d", addrs[i]);
+        }
+        w += snprintf(g_hal_reply + w, sizeof(g_hal_reply) - w, "]");
+
+        if (!was_active) i2cDeinit();
+
+        if (msg->reply_len > 0)
+            nats_msg_respond_str(client, msg, g_hal_reply);
+        return;
+    }
+
+    /* i2c.recover — bus recovery */
+    if (strcmp(rest, "recover") == 0) {
+        i2cRecover();
+        if (msg->reply_len > 0)
+            nats_msg_respond_str(client, msg, "ok");
+        return;
+    }
+
+    /* Parse address: i2c.{addr}.{action} */
+    char addrStr[8];
+    const char *dot = strchr(rest, '.');
+    if (!dot) {
+        halError(client, msg, "bad_request", "missing .detect, .read, or .write");
+        return;
+    }
+    size_t alen = dot - rest;
+    if (alen >= sizeof(addrStr)) {
+        halError(client, msg, "bad_request", "address too long");
+        return;
+    }
+    memcpy(addrStr, rest, alen);
+    addrStr[alen] = '\0';
+
+    int addr = parsePin(addrStr);
+    if (addr < 1 || addr > 127) {
+        halError(client, msg, "bad_address", "I2C address must be 1-127");
+        return;
+    }
+
+    const char *action = dot + 1;
+    bool was_active = i2cActive();
+    if (!was_active) i2cInit();
+
+    if (strcmp(action, "detect") == 0) {
+        bool found = i2cDetect((uint8_t)addr);
+        snprintf(g_hal_reply, sizeof(g_hal_reply), "%s", found ? "true" : "false");
+        if (msg->reply_len > 0)
+            nats_msg_respond_str(client, msg, g_hal_reply);
+    } else if (strcmp(action, "read") == 0) {
+        /* Payload: {"reg":0,"len":2} */
+        int reg = 0, len = 1;
+        if (payload[0] == '{') {
+            char pattern[32];
+            /* Parse "reg" field */
+            snprintf(pattern, sizeof(pattern), "\"reg\"");
+            const char *rp = strstr(payload, pattern);
+            if (rp) { rp += 5; while (*rp == ' ' || *rp == ':') rp++; reg = atoi(rp); }
+            /* Parse "len" field */
+            snprintf(pattern, sizeof(pattern), "\"len\"");
+            rp = strstr(payload, pattern);
+            if (rp) { rp += 5; while (*rp == ' ' || *rp == ':') rp++; len = atoi(rp); }
+        }
+        if (len < 1) len = 1;
+        if (len > 32) len = 32;
+
+        uint8_t buf[32];
+        if (!i2cReadReg((uint8_t)addr, (uint8_t)reg, buf, (uint8_t)len)) {
+            halError(client, msg, "read_failed", "I2C read error");
+        } else {
+            int w = 0;
+            w += snprintf(g_hal_reply, sizeof(g_hal_reply), "[");
+            for (int i = 0; i < len; i++) {
+                if (i > 0) g_hal_reply[w++] = ',';
+                w += snprintf(g_hal_reply + w, sizeof(g_hal_reply) - w, "%d", buf[i]);
+            }
+            w += snprintf(g_hal_reply + w, sizeof(g_hal_reply) - w, "]");
+            if (msg->reply_len > 0)
+                nats_msg_respond_str(client, msg, g_hal_reply);
+        }
+    } else if (strcmp(action, "write") == 0) {
+        /* Payload: {"reg":0,"data":[1,2]} */
+        int reg = 0;
+        uint8_t data[32];
+        int dlen = 0;
+
+        if (payload[0] == '{') {
+            /* Parse "reg" */
+            const char *rp = strstr(payload, "\"reg\"");
+            if (rp) { rp += 5; while (*rp == ' ' || *rp == ':') rp++; reg = atoi(rp); }
+            /* Parse "data" array */
+            const char *dp = strstr(payload, "\"data\"");
+            if (dp) {
+                dp = strchr(dp, '[');
+                if (dp) {
+                    dp++;
+                    while (*dp && *dp != ']' && dlen < 32) {
+                        while (*dp == ' ' || *dp == ',') dp++;
+                        if (*dp == ']') break;
+                        data[dlen++] = (uint8_t)atoi(dp);
+                        while (*dp && *dp != ',' && *dp != ']') dp++;
+                    }
+                }
+            }
+        }
+
+        if (dlen == 0) {
+            halError(client, msg, "bad_request", "need data array");
+        } else if (!i2cWriteReg((uint8_t)addr, (uint8_t)reg, data, (uint8_t)dlen)) {
+            halError(client, msg, "write_failed", "I2C write error");
+        } else {
+            if (msg->reply_len > 0)
+                nats_msg_respond_str(client, msg, "ok");
+        }
+    } else {
+        halError(client, msg, "bad_action", "use detect, read, or write");
+    }
+
+    if (!was_active) i2cDeinit();
+}
+
+/*============================================================================
  * Handler: device.list — JSON array of all registered devices
  *============================================================================*/
 
@@ -405,6 +552,49 @@ static void halDeviceLookup(nats_client_t *client, const nats_msg_t *msg,
             halError(client, msg, "not_actuator", devName);
             return;
         }
+
+        /* Display actuators: handle text/template payloads */
+        if (deviceIsDisplay(dev->kind) && payload[0] && !isdigit((unsigned char)payload[0]) && payload[0] != '-') {
+            uint8_t col_offset = (dev->kind == DEV_ACTUATOR_SH1106) ? 2 : 0;
+            uint8_t height = (dev->pin == 1) ? 32 : 64;
+
+            if (payload[0] == '!') {
+                /* Raw text mode: write directly without template interpolation */
+                char buf[128];
+                strncpy(buf, payload + 1, sizeof(buf) - 1);
+                buf[sizeof(buf) - 1] = '\0';
+                /* Unescape literal \n to real newlines */
+                { char *r = buf, *w = buf;
+                  while (*r) { if (r[0]=='\\' && r[1]=='n') { *w++='\n'; r+=2; } else { *w++=*r++; } }
+                  *w = '\0'; }
+                int max_lines = (height == 32) ? 4 : 8;
+                char *line_start = buf;
+                int line_num = 0;
+                while (line_start && *line_start && line_num < max_lines) {
+                    char *nl = strchr(line_start, '\n');
+                    if (nl) *nl = '\0';
+                    ssd1306WriteText(dev->i2c_addr, line_num, line_start, col_offset);
+                    line_num++;
+                    if (nl) line_start = nl + 1;
+                    else break;
+                }
+                while (line_num < max_lines) {
+                    ssd1306WriteText(dev->i2c_addr, line_num, "", col_offset);
+                    line_num++;
+                }
+            } else {
+                /* Template mode: update template and render */
+                strncpy(dev->disp_template, payload, sizeof(dev->disp_template) - 1);
+                dev->disp_template[sizeof(dev->disp_template) - 1] = '\0';
+                ssd1306RenderTemplate(dev->i2c_addr, dev->disp_template, height, col_offset);
+                devicesMarkDirty();
+            }
+            displayPollReset();
+            if (msg->reply_len > 0)
+                nats_msg_respond_str(client, msg, "ok");
+            return;
+        }
+
         int val = payload[0] ? atoi(payload) : 0;
         deviceSetActuator(dev, val);
         if (msg->reply_len > 0)
@@ -466,7 +656,7 @@ void onNatsHal(nats_client_t *client, const nats_msg_t *msg, void *userdata) {
     const char *suffix = msg->subject + halPrefixLen();
 
     /* Copy payload into null-terminated stack buffer */
-    char payload[64];
+    char payload[256];
     size_t plen = msg->data_len < sizeof(payload) - 1
                   ? msg->data_len : sizeof(payload) - 1;
     if (msg->data && plen > 0)
@@ -492,6 +682,7 @@ void onNatsHal(nats_client_t *client, const nats_msg_t *msg, void *userdata) {
     else if (strcmp(segment, "pwm") == 0)    halPwm(client, msg, rest, payload);
     else if (strcmp(segment, "dac") == 0)    halDac(client, msg, rest, payload);
     else if (strcmp(segment, "uart") == 0)   halUart(client, msg, rest, payload);
+    else if (strcmp(segment, "i2c") == 0)    halI2c(client, msg, rest, payload);
     else if (strcmp(segment, "system") == 0) halSystem(client, msg, rest, payload);
     else if (strcmp(segment, "device") == 0) halDevice(client, msg, rest, payload);
     else                                     halDeviceLookup(client, msg, suffix, payload);

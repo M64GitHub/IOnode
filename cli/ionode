@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-IONODE_VERSION="0.2.0"
+IONODE_VERSION="0.3.0"
 IONODE_CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- Load libraries ---
@@ -49,6 +49,7 @@ _show_help() {
     printf '    %sadc%s    %s<node> <pin>%s              Raw ADC read\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %spwm%s    %s<node> <pin> get|set [v]%s  Raw PWM access\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %suart%s   %s<node> read|write [text]%s  UART serial\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %si2c%s    %s<node> scan|detect|read|write%s  I2C bus access\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %sdevices%s %s<node>%s                   List registered devices\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '\n'
 
@@ -170,6 +171,7 @@ case "$COMMAND" in
     adc)        cmd_adc "$@" ;;
     pwm)        cmd_pwm "$@" ;;
     uart)       cmd_uart "$@" ;;
+    i2c)        cmd_i2c "$@" ;;
     devices)    cmd_devices "$@" ;;
 
     # Config

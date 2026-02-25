@@ -108,8 +108,8 @@ cmd_ls() {
         rssi=$(echo "$line" | jq -r '.rssi // empty' 2>/dev/null)
 
         local n_sensors n_actuators
-        n_sensors=$(echo "$line" | jq '[.devices[] | select(.kind | test("digital_in|analog_in|ntc_10k|ldr|internal_temp|clock_|nats_value|serial_text"))] | length' 2>/dev/null || echo 0)
-        n_actuators=$(echo "$line" | jq '[.devices[] | select(.kind | test("digital_out|relay|pwm|rgb_led"))] | length' 2>/dev/null || echo 0)
+        n_sensors=$(echo "$line" | jq '[.devices[] | select(.kind | test("digital_in|analog_in|ntc_10k|ldr|internal_temp|clock_|nats_value|serial_text|i2c_|dht"))] | length' 2>/dev/null || echo 0)
+        n_actuators=$(echo "$line" | jq '[.devices[] | select(.kind | test("digital_out|relay|pwm|rgb_led|ssd1306|sh1106"))] | length' 2>/dev/null || echo 0)
 
         # Format heap
         local heap_str
@@ -300,7 +300,7 @@ _print_node_card() {
         printf '    '
         echo "$devices_json" | jq -r '.[] | "\(.kind):\(.name)"' 2>/dev/null | while IFS=: read -r kind dname; do
             case "$kind" in
-                digital_out|relay|pwm|rgb_led)
+                digital_out|relay|pwm|rgb_led|ssd1306|sh1106)
                     printf '%s%s%s ' "$(c_actuator)" "$dname" "$(_rst)" ;;
                 *)
                     printf '%s%s%s ' "$(c_sensor)" "$dname" "$(_rst)" ;;
@@ -397,7 +397,7 @@ _print_node_detail() {
 
             local kind_color="c_sensor"
             case "$dkind" in
-                digital_out|relay|pwm|rgb_led) kind_color="c_actuator" ;;
+                digital_out|relay|pwm|rgb_led|ssd1306|sh1106) kind_color="c_actuator" ;;
             esac
 
             printf '    %s%-16s%s %s%-14s%s' \

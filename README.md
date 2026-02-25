@@ -1,6 +1,6 @@
 # IOnode
 
-![Version](https://img.shields.io/badge/firmware-v0.2.0-ff8c00) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-ESP32-333)
+![Version](https://img.shields.io/badge/firmware-v0.3.0-ff8c00) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-ESP32-333)
 
 **Flash any ESP32. It speaks NATS.**  |  [ionode.io](https://ionode.io) | [Flash from browser](https://ionode.io/flash.html)
 
@@ -11,31 +11,32 @@ Flash it, name it, point it at a NATS server - done. Read sensors from a script,
 
 **Supported chips:** ESP32-C6 · ESP32-S3 · ESP32-C3 · ESP32
 
+**Supports:** GPIO · ADC · PWM · Relays · NTC & LDR sensors · DHT11 & DHT22 · I2C (BME280, BH1750, SHT31, ADS1115) · SSD1306/SH1106 OLED display · RGB LED · UART
 
 ```
 Your laptop / server / Raspberry Pi
     |
     +-- NATS server
-          |-- ionode-01.hal.*      <-- temperature sensor, relay
-          |-- ionode-02.hal.*      <-- ADC inputs, PWM outputs
-          +-- ionode-03.hal.*      <-- UART bridge, GPIO
+          |-- ionode-01.hal.*      <-- BME280 + OLED display, relay
+          |-- ionode-02.hal.*      <-- NTC temp, LDR, PWM fan
+          +-- ionode-03.hal.*      <-- ADS1115 ADC, GPIO, UART
 ```
 
 ## Contents
 
 - [Quick Start](#quick-start)
+- [Hello World](#hello-world) - your first sensor, display, and event
+- [Documentation](#documentation) - comprehensive guides
 - [CLI Tool](#cli-tool) - manage your fleet from the terminal
 - [Fleet Dashboard](#fleet-dashboard) - live web UI for monitoring
 - [Web UI (On-Device)](#web-ui-on-device) - per-node configuration
 - [Fleet Management](#fleet-management) - tags, heartbeats, events, remote config
 - [NATS Subject Reference](#nats-subject-reference) - the full protocol
-- [Device Kinds](#device-kinds) - sensors &amp; actuators
+- [Device Kinds](#device-kinds) - sensors & actuators
 - [Adding a New Sensor Type](#adding-a-new-sensor-type) - built to be hacked
-- [Building &amp; Flashing](#building--flashing)
+- [Building & Flashing](#building--flashing)
 - [OpenClaw Integration](#openclaw-integration) - natural language control
 - [Integrations](#integrations) - scripts, Node-RED, Home Assistant, anything
-
-**Documentation:** [`docs/`](docs/) - [Setup Guide](docs/SETUP.md) · [CLI Reference](docs/CLI.md) · [Release Notes](docs/RELEASE-NOTES.md)
 
 ---
 
@@ -89,6 +90,48 @@ nats req ionode-01.hal.gpio.8.set "1"
 ```
 
 That's it. Your ESP32 speaks NATS.
+
+---
+
+## Hello World
+
+A temperature sensor, an OLED display, and a threshold alert - in four commands.
+
+```bash
+# 1. Register an NTC 10K thermistor on pin 2
+ionode device add ionode-01 room_temp ntc_10k 2 --unit C
+
+# 2. Register an OLED display (I2C address 60 = 0x3C)
+#    Use ssd1306 or sh1106 depending on your display controller
+ionode device add ionode-01 display ssd1306 0 \
+  --i2c-addr 60 --template "Hello World!\n{room_temp}C"
+
+# 3. Alert when temperature exceeds 30°C (60s cooldown)
+ionode event set ionode-01 room_temp --above 30 --cooldown 60
+
+# 4. Read the sensor
+ionode read ionode-01 room_temp
+# → 23.4
+```
+
+The display auto-refreshes with the live temperature reading. The event fires a NATS notification on `ionode-01.events.room_temp` whenever the value crosses 30°C.
+
+All device types, wiring options, and configuration details are described in the sections below. For in-depth guides, see the [Documentation](#documentation) section.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Setup Guide](docs/SETUP.md) | NATS server installation, CLI setup, dashboard, network architecture |
+| [GPIO & Actuators](docs/GPIO.md) | Digital I/O, relays, PWM, RGB LEDs - wiring, registration, persistence |
+| [Standard Sensors](docs/IOnode-Standard-Sensors.md) | NTC thermistors, LDR light sensors, internal temperature - wiring and calibration |
+| [DHT Sensors](docs/DHT-Sensors.md) | DHT11, DHT22, AM2303 - wiring, pull-up resistors, single-wire setup |
+| [I2C Sensors](docs/I2C-Sensors.md) | BME280, BH1750, SHT31, ADS1115, generic I2C - pin maps, multi-channel setup |
+| [I2C Display](docs/I2C-Display.md) | SSD1306 OLED - template engine, token reference, raw text mode |
+| [CLI Reference](docs/CLI.md) | All commands with examples, global options, NATS subject mapping |
+| [NATS API Reference](docs/NATS-API.md) | Complete protocol contract - every subject, payload, and response |
 
 ---
 
@@ -205,7 +248,7 @@ Nodes publish periodic health reports to `_ion.heartbeat` (default: every 60s, c
 
 ```json
 {
-  "device": "ionode-01", "tag": "greenhouse", "version": "0.2.0",
+  "device": "ionode-01", "tag": "greenhouse", "version": "0.2.1",
   "uptime": 3600, "heap": 245000, "rssi": -52,
   "nats_reconnects": 0, "sensors": 4, "actuators": 2, "events_fired": 3
 }
@@ -230,7 +273,7 @@ Events persist across reboots. Configurable via CLI, NATS, web API, and the on-d
 
 ### Actuator State Persistence
 
-Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB LED values are NOT persisted - resuming arbitrary analog values on boot could be unsafe.
+Relay and digital output states survive reboots. State is saved to `devices.json` with a 5-second debounce to protect flash. PWM and RGB LED values are NOT persisted - resuming arbitrary analog values on boot could be unsafe. See [GPIO & Actuators](docs/GPIO.md) for details.
 
 ### Remote Configuration
 
@@ -242,91 +285,40 @@ Complete protocol reference: [`docs/NATS-API.md`](docs/NATS-API.md)
 
 ## NATS Subject Reference
 
-All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are plain text or simple values. Responses come back via NATS request/reply.
+All subjects are prefixed with the device name (e.g. `ionode-01`). Payloads are plain text or JSON. Responses come back via NATS request/reply.
 
-Full protocol specification with payload formats and error handling: [`docs/NATS-API.md`](docs/NATS-API.md)
+```
+{name}.hal.gpio.{pin}.get/set          GPIO read/write
+{name}.hal.adc.{pin}.read              12-bit ADC
+{name}.hal.pwm.{pin}.set/get           8-bit PWM
+{name}.hal.uart.read/write             Serial I/O
+{name}.hal.i2c.scan/detect/read/write  I2C bus access
+{name}.hal.system.*                    Chip temp, heap, uptime, RSSI
+{name}.hal.{dev}.get/set/info          Registered device operations
+{name}.config.*                        Remote configuration
+_ion.discover / _ion.heartbeat         Fleet discovery & monitoring
+{name}.events.{sensor}                 Threshold event notifications
+```
 
-### Core HAL (always available, zero config)
+Complete protocol specification with payload formats, error handling, and CLI mapping: [`docs/NATS-API.md`](docs/NATS-API.md)
 
-| Subject | Payload | Response | Notes |
-|---------|---------|----------|-------|
-| `{name}.hal.gpio.{pin}.get` | - | `0` or `1` | Sets pin to INPUT, reads |
-| `{name}.hal.gpio.{pin}.set` | `0` or `1` | `ok` | Sets pin to OUTPUT, writes |
-| `{name}.hal.adc.{pin}.read` | - | `0`-`4095` | 12-bit raw ADC |
-| `{name}.hal.pwm.{pin}.set` | `0`-`255` | `ok` | 8-bit PWM output |
-| `{name}.hal.pwm.{pin}.get` | - | `0`-`255` | Last written PWM value (cached) |
-| `{name}.hal.uart.read` | - | last line | Requires a `serial_text` device |
-| `{name}.hal.uart.write` | text | `ok` | Requires a `serial_text` device |
-| `{name}.hal.system.temperature` | - | `38.1` | Chip temp in °C |
-| `{name}.hal.system.heap` | - | `156000` | Free heap bytes |
-| `{name}.hal.system.uptime` | - | `3600` | Seconds since boot |
-| `{name}.hal.system.rssi` | - | `-52` | WiFi signal strength |
-| `{name}.hal.system.reset_reason` | - | `software` | Last reset reason |
-| `{name}.hal.system.nats_reconnects` | - | `1` | NATS reconnect count |
-| `{name}.hal.device.list` | - | JSON array | All registered devices + values |
-
-### Registered Devices
-
-| Subject | Payload | Response |
-|---------|---------|----------|
-| `{name}.hal.{dev}` | - | Sensor value or actuator state |
-| `{name}.hal.{dev}.get` | - | Same as above |
-| `{name}.hal.{dev}.set` | value | `ok` (actuators only) |
-| `{name}.hal.{dev}.info` | - | JSON: name, kind, value, pin, unit |
-
-### Discovery &amp; Fleet
-
-| Subject | Payload | Response | Notes |
-|---------|---------|----------|-------|
-| `_ion.discover` | - | Capabilities JSON | All nodes respond |
-| `{name}.capabilities` | - | Capabilities JSON | Single node |
-| `_ion.group.{tag}` | - | Capabilities JSON | All nodes with matching tag |
-| `_ion.heartbeat` | _(subscribe)_ | Health JSON | Periodic, default every 60s |
-| `{name}.events.{sensor}` | _(subscribe)_ | Threshold event JSON | Edge-detected alerts |
-
-### Remote Configuration
-
-| Subject | Payload | Response |
-|---------|---------|----------|
-| `{name}.config.get` | - | Config JSON (password excluded) |
-| `{name}.config.device.list` | - | JSON array of devices |
-| `{name}.config.device.add` | `{"n":"x","k":"relay","p":5}` | `{"ok":true}` |
-| `{name}.config.device.remove` | `{"n":"x"}` | `{"ok":true}` |
-| `{name}.config.tag.set` | `greenhouse` | `{"ok":true}` |
-| `{name}.config.tag.get` | - | `{"tag":"greenhouse"}` |
-| `{name}.config.heartbeat.set` | `60` | `{"ok":true}` |
-| `{name}.config.event.set` | `{"n":"x","t":28,"d":"above","cd":10}` | `{"ok":true}` |
-| `{name}.config.event.clear` | `{"n":"x"}` | `{"ok":true}` |
-| `{name}.config.event.list` | - | JSON array |
-| `{name}.config.name.set` | `new-name` | `{"ok":true}` (reboots) |
+- [Discovery & Inventory](docs/NATS-API.md#1-discovery--inventory) - find nodes, query groups, capabilities format
+- [Hardware Access (HAL)](docs/NATS-API.md#2-hardware-access-hal) - GPIO, ADC, PWM, UART, I2C, system queries
+- [Registered Devices](docs/NATS-API.md#3-registered-devices) - read sensors, set actuators, device info
+- [Remote Configuration](docs/NATS-API.md#4-remote-configuration) - device registry, tags, heartbeat, events, rename
+- [Monitoring](docs/NATS-API.md#5-monitoring) - heartbeats, threshold events, event configuration
 
 ---
 
 ## Device Kinds
 
-### Sensors
+**Sensors:** `digital_in` · `analog_in` · `ntc_10k` · `ldr` · `internal_temp` · `clock_hour` · `clock_minute` · `clock_hhmm` · `nats_value` · `serial_text` · `i2c_generic` · `i2c_bme280` · `i2c_bh1750` · `i2c_sht31` · `i2c_ads1115` · `dht11_temp` · `dht11_humi` · `dht22_temp` · `dht22_humi`
 
-| Kind | What it does |
-|------|--------------|
-| `digital_in` | `digitalRead(pin)` → 0 or 1 |
-| `analog_in` | `analogRead(pin)` → 0–4095 (12-bit) |
-| `ntc_10k` | 10K NTC thermistor, Steinhart-Hart, EMA-smoothed |
-| `ldr` | Light-dependent resistor → 0–100% |
-| `internal_temp` | ESP32 on-die temperature sensor |
-| `clock_hour` | Current hour (0–23) from NTP |
-| `clock_minute` | Current minute (0–59) from NTP |
-| `clock_hhmm` | HHMM format (e.g. 1430 = 2:30 PM) |
-| `nats_value` | Subscribes to a NATS subject, stores last value |
-| `serial_text` | Reads lines from UART1, parses numeric value |
+**Actuators:** `digital_out` · `relay` · `pwm` · `rgb_led` · `ssd1306` · `sh1106`
 
-### Actuators
+Full reference with descriptions: [Supported Device Kinds](docs/NATS-API.md#supported-device-kinds)
 
-| Kind | What it does |
-|------|--------------|
-| `digital_out` | `digitalWrite(pin, val)` |
-| `relay` | `digitalWrite` with optional inversion |
-| `pwm` | `analogWrite(pin, 0–255)` |
-| `rgb_led` | Built-in RGB LED, packed `0xRRGGBB` value |
+Wiring and configuration guides: [GPIO & Actuators](docs/GPIO.md) · [Standard Sensors](docs/IOnode-Standard-Sensors.md) · [I2C Sensors](docs/I2C-Sensors.md) · [I2C Display](docs/I2C-Display.md)
 
 ### Registering Devices
 
@@ -355,7 +347,9 @@ Or edit `data/devices.json` directly:
 ]
 ```
 
-Fields: `n`=name, `k`=kind, `p`=pin (255=virtual), `u`=unit, `i`=inverted, `ns`=nats_subject (for `nats_value`), `bd`=baud (for `serial_text`).
+Fields: `n`=name, `k`=kind, `p`=pin (255=virtual), `u`=unit, `i`=inverted, `ns`=nats_subject (for `nats_value`), `bd`=baud (for `serial_text`), `ia`=I2C address, `dt`=display template, `rl`=register read length, `sc`=scale multiplier.
+
+Full payload reference: [Device Registry Management](docs/NATS-API.md#device-registry-management)
 
 ---
 
@@ -526,6 +520,7 @@ IOnode/
 ├── include/
 │   ├── version.h              IONODE_VERSION
 │   ├── devices.h              Device registry structs & API
+│   ├── i2c_devices.h          I2C subsystem header (pins, cache, drivers, display)
 │   ├── nats_hal.h             HAL NATS handler
 │   ├── nats_config.h          Remote config NATS handler
 │   ├── web_config.h           Web UI server
@@ -533,7 +528,9 @@ IOnode/
 ├── src/
 │   ├── main.cpp               Setup, loop, NATS, serial commands
 │   ├── devices.cpp            Registry, sensor reading, persistence, events
-│   ├── nats_hal.cpp           HAL request router (gpio/adc/pwm/uart/system)
+│   ├── i2c_devices.cpp        I2C bus management + sensor drivers (BME280, BH1750, SHT31, ADS1115)
+│   ├── i2c_display.cpp        SSD1306 OLED driver + template engine + 5x7 font
+│   ├── nats_hal.cpp           HAL request router (gpio/adc/pwm/uart/i2c/system)
 │   ├── nats_config.cpp        Remote config router (config.> subjects)
 │   ├── web_config.cpp         Web UI server + REST API
 │   └── setup_portal.cpp       WiFi AP + captive portal
@@ -545,19 +542,16 @@ IOnode/
 │   ├── SETUP.md               Setup guide - start here
 │   ├── NATS-API.md            Protocol reference (source of truth)
 │   ├── CLI.md                 CLI command reference
-│   └── RELEASE-NOTES.md       Changelog
+│   ├── GPIO.md                GPIO, relays, PWM, RGB LEDs
+│   ├── IOnode-Standard-Sensors.md  NTC, LDR, internal temp
+│   ├── I2C-Sensors.md         BME280, BH1750, SHT31, ADS1115
+│   ├── I2C-Display.md         SSD1306 OLED & template engine
+│   ├── RELEASE-NOTES.md       Current release changelog
+│   └── RELEASE-HISTORY.md     Past release notes
 ├── skill/ionode/              OpenClaw integration skill
 └── README.md
 ```
 
 ---
 
-## Links
-
-- **Website:** [ionode.io](https://ionode.io)
-- **Flash from browser:** [ionode.io/flash.html](https://ionode.io/flash.html)
-- **Documentation:** [`docs/`](docs/) · [Setup](docs/SETUP.md) · [NATS API](docs/NATS-API.md) · [CLI](docs/CLI.md)
-- **WireClaw:** [wireclaw.io](https://wireclaw.io) - AI agent on ESP32, same protocol
-- **OpenClaw:** [openclaw](https://github.com/openclaw/openclaw) - Natural language hardware control
-
-*Part of the [WireClaw](https://github.com/M64GitHub/WireClaw) ecosystem.*
+*[ionode.io](https://ionode.io) · [Flash from browser](https://ionode.io/flash.html) · [WireClaw](https://wireclaw.io) · [OpenClaw](https://github.com/openclaw/openclaw) · Part of the [WireClaw](https://github.com/M64GitHub/WireClaw) ecosystem.*
