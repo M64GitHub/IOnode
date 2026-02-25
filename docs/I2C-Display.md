@@ -297,10 +297,10 @@ A complete setup from scratch: a BME280 sensor feeding live data to an SSD1306 d
 ```
   ESP32-C6                BME280         SSD1306 OLED
   ────────                ──────         ────────────
-  3V3  ──────────┬──────  VCC     ┬────  VCC
-  GND  ──────────┬──────  GND     ┬────  GND
-  IO6 (SDA) ─────┬──────  SDA     ┬────  SDA
-  IO7 (SCL) ─────┬──────  SCL     ┬────  SCL
+  3V3  ─────────────────  VCC  ─────────  VCC
+  GND  ─────────────────  GND  ─────────  GND
+  IO6 (SDA) ────────────  SDA  ─────────  SDA
+  IO7 (SCL) ────────────  SCL  ─────────  SCL
 ```
 
 All four lines are shared between the BME280 and the SSD1306. Two devices, same 4 wires.
