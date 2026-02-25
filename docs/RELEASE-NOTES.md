@@ -42,7 +42,7 @@ Reads register `pin` (0-255) from `i2c_addr`, combines bytes big-endian, multipl
 
 ## DHT11/DHT22 Temperature & Humidity
 
-Bit-banged GPIO driver for DHT11 and DHT22 (AM2302) sensors. No external libraries — hand-rolled timing with critical section protection (~4ms read window).
+Bit-banged GPIO driver for DHT11 and DHT22 (AM2302/AM2303) sensors. No external libraries — hand-rolled timing with critical section protection (~4ms read window).
 
 | Kind | Sensor | Description |
 |------|--------|-------------|
@@ -202,6 +202,7 @@ Bus is reference-counted: initialized on first I2C device registration, deinitia
 | `src/i2c_display.cpp` | SSD1306/SH1106 OLED driver + template engine + 5x7 font |
 | `src/dht_driver.cpp` | DHT11/DHT22 bit-bang driver with per-pin read cache |
 | `docs/I2C-Display.md` | OLED display guide (wiring, templates, raw text, worked examples) |
+| `docs/DHT-Sensors.md` | DHT sensor guide (wiring, AM2303, quickstart) |
 
 ## Files Modified
 
