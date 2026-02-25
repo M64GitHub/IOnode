@@ -104,7 +104,7 @@ ionode device add ionode-01 room_humi dht22_humi 4 --unit %
 
 Both devices use the **same GPIO pin** (4). The device kind (`dht22_temp` vs `dht22_humi`) determines which value is returned.
 
-> **AM2303 users:** Use `dht22_temp` and `dht22_humi` — the AM2303 is a DHT22 in a different package. There is no separate `am2303` device kind.
+> **AM2303 users:** Use `dht22_temp` and `dht22_humi` - the AM2303 is a DHT22 in a different package. There is no separate `am2303` device kind.
 
 ### 3. Read
 
@@ -165,7 +165,7 @@ ionode watch --events
 The on-device web UI at `http://{device-ip}/` supports DHT sensors in the Devices tab:
 
 - **Add Device** form includes all DHT device types (`dht11_temp`, `dht11_humi`, `dht22_temp`, `dht22_humi`)
-- **AM2303 users:** select `dht22_temp` or `dht22_humi` from the dropdown — there is no separate AM2303 entry
+- **AM2303 users:** select `dht22_temp` or `dht22_humi` from the dropdown - there is no separate AM2303 entry
 - **Pin** field is required - enter the GPIO pin number
 - Default units are assigned automatically ("C" for temperature, "%" for humidity)
 

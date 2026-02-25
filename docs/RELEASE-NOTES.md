@@ -42,7 +42,7 @@ Reads register `pin` (0-255) from `i2c_addr`, combines bytes big-endian, multipl
 
 ## DHT11/DHT22 Temperature & Humidity
 
-Bit-banged GPIO driver for DHT11 and DHT22 (AM2302/AM2303) sensors. No external libraries — hand-rolled timing with critical section protection (~4ms read window).
+Bit-banged GPIO driver for DHT11 and DHT22 (AM2302/AM2303) sensors. No external libraries - hand-rolled timing with critical section protection (~4ms read window).
 
 | Kind | Sensor | Description |
 |------|--------|-------------|
@@ -64,7 +64,7 @@ Two devices on the same GPIO pin share a per-pin reading cache (2-second TTL), s
 
 ## SSD1306 / SH1106 OLED Display
 
-128x64 and 128x32 OLED displays as actuator devices. Text-only with built-in 5x7 font (21 chars per line). Both SSD1306 and SH1106 controllers are supported — most cheap modules from Amazon/AliExpress use SH1106.
+128x64 and 128x32 OLED displays as actuator devices. Text-only with built-in 5x7 font (21 chars per line). Both SSD1306 and SH1106 controllers are supported - most cheap modules from Amazon/AliExpress use SH1106.
 
 ```bash
 # SSD1306 controller
