@@ -46,6 +46,7 @@ enum DeviceKind {
     DEV_ACTUATOR_RGB_LED,       /* rgbLedWrite packed 0xRRGGBB */
     DEV_ACTUATOR_SSD1306,       /* SSD1306 OLED display (text via template) */
     DEV_ACTUATOR_SH1106,        /* SH1106 OLED display (text via template, 2-col offset) */
+    DEV_ACTUATOR_NEOPIXEL,      /* WS2812/NeoPixel addressable LED strip */
 };
 
 struct Device {
@@ -60,8 +61,11 @@ struct Device {
     float       nats_value;
     char        nats_msg[64];
     uint16_t    nats_sid;
-    /* Serial text baud rate (only meaningful for DEV_SENSOR_SERIAL_TEXT) */
+    /* Serial text baud rate (only meaningful for DEV_SENSOR_SERIAL_TEXT)
+       For DEV_ACTUATOR_NEOPIXEL: pixel count */
     uint32_t    baud;
+    /* NeoPixel color order (only meaningful for DEV_ACTUATOR_NEOPIXEL) */
+    uint8_t     neo_color_order;
     /* I2C fields */
     uint8_t     i2c_addr;           /* I2C slave address (0 = not I2C) */
     char        disp_template[128]; /* display template for SSD1306 actuators */
@@ -91,6 +95,16 @@ struct Device {
 #define EV_DIR_ABOVE  1
 #define EV_DIR_BELOW  2
 
+/* NeoPixel color order constants */
+#define NEO_ORDER_GRB   0
+#define NEO_ORDER_RGB   1
+#define NEO_ORDER_RBG   2
+#define NEO_ORDER_BRG   3
+#define NEO_ORDER_BGR   4
+#define NEO_ORDER_GBR   5
+#define NEO_ORDER_RGBW  6
+#define NEO_ORDER_GRBW  7
+
 /* Initialize device registry - loads from /devices.json, auto-registers chip_temp */
 void devicesInit();
 
@@ -117,7 +131,8 @@ bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
                     uint8_t i2c_addr = 0,
                     const char *disp_template = nullptr,
                     uint8_t i2c_reg_len = 1,
-                    float i2c_scale = 1.0f);
+                    float i2c_scale = 1.0f,
+                    uint8_t neo_color_order = NEO_ORDER_GRB);
 
 /* Remove a device by name. Returns true if found and removed. */
 bool deviceRemove(const char *name);

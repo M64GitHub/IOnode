@@ -15,6 +15,7 @@
 #include "devices.h"
 #include "nats_hal.h"
 #include "i2c_devices.h"
+#include "neopixel_driver.h"
 
 /* Externs from main.cpp */
 extern char cfg_wifi_ssid[64];
@@ -366,6 +367,12 @@ static void handleGetDevices() {
                 d->ev_armed ? "true" : "false");
         }
 
+        /* Append pixel count and color order for neopixel devices */
+        if (d->kind == DEV_ACTUATOR_NEOPIXEL) {
+            w += snprintf(buf + w, sizeof(buf) - w, ",\"pixels\":%d,\"color_order\":%d",
+                          neopixelGetCount(i), d->neo_color_order);
+        }
+
         /* Append history array for sensors with recorded readings */
         int hcount = d->history_full ? DEV_HISTORY_LEN : d->history_idx;
         if (hcount > 0) {
@@ -450,6 +457,7 @@ static void handleAddDevice() {
     else if (strcmp(kind_str, "dht11_humi") == 0)  kind = DEV_SENSOR_DHT11_HUMI;
     else if (strcmp(kind_str, "dht22_temp") == 0)  kind = DEV_SENSOR_DHT22_TEMP;
     else if (strcmp(kind_str, "dht22_humi") == 0)  kind = DEV_SENSOR_DHT22_HUMI;
+    else if (strcmp(kind_str, "neopixel") == 0)   kind = DEV_ACTUATOR_NEOPIXEL;
     else {
         server.send(400, "application/json", "{\"ok\":false,\"error\":\"unknown kind\"}");
         return;
@@ -480,9 +488,12 @@ static void handleAddDevice() {
     /* OLED display defaults (SSD1306/SH1106) */
     if (deviceIsDisplay(kind)) pin = (uint8_t)wcJsonGetInt(body, "pin", 0);
 
+    /* NeoPixel color order */
+    uint8_t neo_co = (uint8_t)wcJsonGetInt(body, "color_order", NEO_ORDER_GRB);
+
     bool ok = deviceRegister(name, kind, (uint8_t)pin, unit, inverted, nullptr, baud,
                              i2c_addr, disp_tmpl[0] ? disp_tmpl : nullptr,
-                             i2c_reg_len, i2c_scale);
+                             i2c_reg_len, i2c_scale, neo_co);
     if (ok) devicesSave();
 
     static char resp[128];
@@ -966,6 +977,7 @@ nav button{padding:0.4rem 0.6rem;font-size:0.8rem}
 <option value="dht11_humi">dht11_humi</option>
 <option value="dht22_temp">dht22_temp</option>
 <option value="dht22_humi">dht22_humi</option>
+<option value="neopixel">neopixel</option>
 </select>
 </div>
 </div>
@@ -1006,6 +1018,21 @@ nav button{padding:0.4rem 0.6rem;font-size:0.8rem}
 <input type="number" id="ad_reglen" value="1" min="1" max="2">
 <label>Scale Multiplier</label>
 <input type="number" id="ad_scale" value="1" step="0.001">
+</div>
+<div id="ad_neo_wrap" class="hidden">
+<label>Pixel Count</label>
+<input type="number" id="ad_pixels" value="1" min="1" max="1024">
+<label>Color Order</label>
+<select id="ad_color_order">
+<option value="0">GRB (WS2812B default)</option>
+<option value="1">RGB</option>
+<option value="2">RBG</option>
+<option value="3">BRG</option>
+<option value="4">BGR</option>
+<option value="5">GBR</option>
+<option value="6">RGBW</option>
+<option value="7">GRBW</option>
+</select>
 </div>
 <div class="actions">
 <button class="btn btn-primary" onclick="addDevice()">Add Device</button>
@@ -1133,6 +1160,7 @@ document.getElementById('ad_chan_wrap').classList.toggle('hidden',!isMultiChan);
 document.getElementById('ad_unit_wrap').classList.toggle('hidden',!isI2c);
 document.getElementById('ad_tmpl_wrap').classList.toggle('hidden',!isDisp);
 document.getElementById('ad_generic_wrap').classList.toggle('hidden',k!=='i2c_generic');
+document.getElementById('ad_neo_wrap').classList.toggle('hidden',k!=='neopixel');
 document.getElementById('ad_scan_btn').classList.toggle('hidden',!isI2c);
 if(k==='i2c_bme280'){document.getElementById('ad_chan_hint').textContent='0=temp, 1=humidity, 2=pressure';document.getElementById('ad_chan').max=2}
 else if(k==='i2c_sht31'){document.getElementById('ad_chan_hint').textContent='0=temp, 1=humidity';document.getElementById('ad_chan').max=1}
@@ -1165,6 +1193,12 @@ d.pin=parseInt(document.getElementById('ad_reg').value)||0;
 d.reg_len=parseInt(document.getElementById('ad_reglen').value)||1;
 d.scale=parseFloat(document.getElementById('ad_scale').value)||1;
 }
+}else if(kind==='neopixel'){
+var pin=parseInt(document.getElementById('ad_pin').value);
+if(isNaN(pin)){toast('Pin required',false);return}
+d.pin=pin;
+d.baud=parseInt(document.getElementById('ad_pixels').value)||1;
+d.color_order=parseInt(document.getElementById('ad_color_order').value)||0;
 }else{
 var pin=parseInt(document.getElementById('ad_pin').value);
 if(isNaN(pin)){toast('Pin required',false);return}
@@ -1196,6 +1230,12 @@ h+='</div>';
 if(d.kind==='rgb_led'){
 var hex='#'+('000000'+d.raw.toString(16)).slice(-6);
 h+='<div class="dev-meta">pin '+d.pin+'</div>';
+h+='<div class="pwm-wrap"><input type="color" value="'+hex+'" onchange="setRgb(\''+d.name+'\',this.value)"><span class="pwm-val">'+hex+'</span>';
+h+='<button class="toggle-btn'+(d.raw===0?' off-active':'')+'" onclick="setDev(\''+d.name+'\',0)" style="margin-left:0.5rem">OFF</button></div>';
+}else if(d.kind==='neopixel'){
+var hex='#'+('000000'+d.raw.toString(16)).slice(-6);
+var coNames=['GRB','RGB','RBG','BRG','BGR','GBR','RGBW','GRBW'];
+h+='<div class="dev-meta">pin '+d.pin+' &middot; '+d.pixels+' pixels &middot; '+(coNames[d.color_order]||'GRB')+'</div>';
 h+='<div class="pwm-wrap"><input type="color" value="'+hex+'" onchange="setRgb(\''+d.name+'\',this.value)"><span class="pwm-val">'+hex+'</span>';
 h+='<button class="toggle-btn'+(d.raw===0?' off-active':'')+'" onclick="setDev(\''+d.name+'\',0)" style="margin-left:0.5rem">OFF</button></div>';
 }else if(d.kind==='digital_out'||d.kind==='relay'){
