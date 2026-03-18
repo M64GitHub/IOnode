@@ -12,6 +12,7 @@
 #include "nats_hal.h"
 #include "devices.h"
 #include "i2c_devices.h"
+#include "neopixel_driver.h"
 #include "soc/soc_caps.h"
 #if !defined(CONFIG_IDF_TARGET_ESP32)
 #include "driver/temperature_sensor.h"
@@ -595,6 +596,16 @@ static void halDeviceLookup(nats_client_t *client, const nats_msg_t *msg,
             return;
         }
 
+        /* NeoPixel: intercept JSON payloads */
+        if (dev->kind == DEV_ACTUATOR_NEOPIXEL && payload[0] == '{') {
+            int slot = dev - deviceGetAll();
+            if (neopixelHandleJson(slot, payload, g_hal_reply, sizeof(g_hal_reply))) {
+                if (msg->reply_len > 0)
+                    nats_msg_respond_str(client, msg, g_hal_reply);
+                return;
+            }
+        }
+
         int val = payload[0] ? atoi(payload) : 0;
         deviceSetActuator(dev, val);
         if (msg->reply_len > 0)
@@ -603,7 +614,14 @@ static void halDeviceLookup(nats_client_t *client, const nats_msg_t *msg,
     }
 
     if (suffix && strcmp(suffix, "get") == 0) {
-        if (deviceIsActuator(dev->kind)) {
+        if (dev->kind == DEV_ACTUATOR_NEOPIXEL) {
+            int slot = dev - deviceGetAll();
+            snprintf(g_hal_reply, sizeof(g_hal_reply),
+                "{\"brightness\":%d,\"count\":%d,\"value\":%u}",
+                neopixelGetBrightness(slot),
+                neopixelGetCount(slot),
+                (unsigned)neopixelGetColor(slot));
+        } else if (deviceIsActuator(dev->kind)) {
             snprintf(g_hal_reply, sizeof(g_hal_reply), "%d", dev->last_value);
         } else {
             float val = deviceReadSensor(dev);

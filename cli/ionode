@@ -23,6 +23,7 @@ source "${IONODE_CLI_DIR}/lib/cmd_hardware.sh"
 source "${IONODE_CLI_DIR}/lib/cmd_config.sh"
 source "${IONODE_CLI_DIR}/lib/cmd_events.sh"
 source "${IONODE_CLI_DIR}/lib/cmd_watch.sh"
+source "${IONODE_CLI_DIR}/lib/cmd_neopixel.sh"
 
 # --- Help ---
 _show_help() {
@@ -50,6 +51,7 @@ _show_help() {
     printf '    %spwm%s    %s<node> <pin> get|set [v]%s  Raw PWM access\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %suart%s   %s<node> read|write [text]%s  UART serial\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %si2c%s    %s<node> scan|detect|read|write%s  I2C bus access\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
+    printf '    %sneopixel%s %s<node> <strip> <action>%s   NeoPixel LED strip\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '    %sdevices%s %s<node>%s                   List registered devices\n' "$(c_accent)" "$(_rst)" "$(c_dim)" "$(_rst)"
     printf '\n'
 
@@ -172,6 +174,7 @@ case "$COMMAND" in
     pwm)        cmd_pwm "$@" ;;
     uart)       cmd_uart "$@" ;;
     i2c)        cmd_i2c "$@" ;;
+    neopixel)   cmd_neopixel "$@" ;;
     devices)    cmd_devices "$@" ;;
 
     # Config

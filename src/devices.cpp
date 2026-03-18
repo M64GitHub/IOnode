@@ -7,6 +7,7 @@
 #include "nats_hal.h"
 #include "i2c_devices.h"
 #include "dht_driver.h"
+#include "neopixel_driver.h"
 #include <nats_atoms.h>
 #include <LittleFS.h>
 #if !defined(CONFIG_IDF_TARGET_ESP32)
@@ -73,6 +74,7 @@ const char *deviceKindName(DeviceKind kind) {
         case DEV_ACTUATOR_RGB_LED:     return "rgb_led";
         case DEV_ACTUATOR_SSD1306:     return "ssd1306";
         case DEV_ACTUATOR_SH1106:      return "sh1106";
+        case DEV_ACTUATOR_NEOPIXEL:    return "neopixel";
         default:                       return "unknown";
     }
 }
@@ -103,6 +105,7 @@ static DeviceKind kindFromString(const char *s) {
     if (strcmp(s, "rgb_led") == 0)      return DEV_ACTUATOR_RGB_LED;
     if (strcmp(s, "ssd1306") == 0)      return DEV_ACTUATOR_SSD1306;
     if (strcmp(s, "sh1106") == 0)       return DEV_ACTUATOR_SH1106;
+    if (strcmp(s, "neopixel") == 0)    return DEV_ACTUATOR_NEOPIXEL;
     return DEV_SENSOR_DIGITAL;
 }
 
@@ -130,7 +133,8 @@ bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
                     const char *unit, bool inverted,
                     const char *nats_subject, uint32_t baud,
                     uint8_t i2c_addr, const char *disp_template,
-                    uint8_t i2c_reg_len, float i2c_scale) {
+                    uint8_t i2c_reg_len, float i2c_scale,
+                    uint8_t neo_color_order) {
     /* Reject HAL reserved names */
     if (halIsReservedName(name)) return false;
 
@@ -164,6 +168,7 @@ bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
             g_devices[i].nats_msg[0] = '\0';
             g_devices[i].nats_sid = 0;
             g_devices[i].baud = baud;
+            g_devices[i].neo_color_order = neo_color_order;
 
             /* I2C fields */
             g_devices[i].i2c_addr = i2c_addr;
@@ -199,8 +204,14 @@ bool deviceRegister(const char *name, DeviceKind kind, uint8_t pin,
                 pinMode(pin, INPUT_PULLUP);
             }
 
+            /* Initialize NeoPixel strip */
+            if (kind == DEV_ACTUATOR_NEOPIXEL && pin != PIN_NONE) {
+                neopixelInit(i, pin, baud > 0 ? (uint16_t)baud : 1, neo_color_order);
+            }
+
             /* Configure GPIO for non-I2C actuators */
-            if (deviceIsActuator(kind) && !deviceIsI2c(kind) && pin != PIN_NONE) {
+            if (deviceIsActuator(kind) && !deviceIsI2c(kind) &&
+                kind != DEV_ACTUATOR_NEOPIXEL && pin != PIN_NONE) {
                 pinMode(pin, OUTPUT);
             }
 
@@ -227,6 +238,10 @@ bool deviceRemove(const char *name) {
     if (dev->kind == DEV_SENSOR_DHT11_TEMP || dev->kind == DEV_SENSOR_DHT11_HUMI ||
         dev->kind == DEV_SENSOR_DHT22_TEMP || dev->kind == DEV_SENSOR_DHT22_HUMI) {
         dhtCacheInvalidate(dev->pin);
+    }
+    if (dev->kind == DEV_ACTUATOR_NEOPIXEL) {
+        int slot = dev - deviceGetAll();
+        neopixelDeinit(slot);
     }
     dev->used = false;
     dev->name[0] = '\0';
@@ -453,6 +468,12 @@ bool deviceSetActuator(Device *dev, int value) {
             }
             return true;
 
+        case DEV_ACTUATOR_NEOPIXEL: {
+            int slot = dev - deviceGetAll();
+            neopixelFill(slot, (uint32_t)value);
+            return true;
+        }
+
         default:
             return false;
     }
@@ -659,6 +680,10 @@ void devicesSave() {
                     ",\"sc\":%.6g", d->i2c_scale);
             }
         }
+        if (d->kind == DEV_ACTUATOR_NEOPIXEL && d->neo_color_order != NEO_ORDER_GRB) {
+            w += snprintf(buf + w, sizeof(buf) - w,
+                ",\"co\":%d", d->neo_color_order);
+        }
         /* Persist last value for relay/digital_out (safe to restore on boot) */
         if ((d->kind == DEV_ACTUATOR_RELAY || d->kind == DEV_ACTUATOR_DIGITAL)
             && d->last_value != 0) {
@@ -755,12 +780,13 @@ static void devicesLoad() {
         devJsonGetString(objBuf, "dt", disp_tmpl, sizeof(disp_tmpl));
         uint8_t i2c_reg_len = (uint8_t)devJsonGetInt(objBuf, "rl", 1);
         float i2c_scale = devJsonGetFloat(objBuf, "sc", 1.0f);
+        uint8_t neo_co = (uint8_t)devJsonGetInt(objBuf, "co", NEO_ORDER_GRB);
 
         DeviceKind kind = kindFromString(kind_str);
         deviceRegister(name, kind, (uint8_t)pin, unit, inverted,
                        nats_subj[0] ? nats_subj : nullptr, baud,
                        i2c_addr, disp_tmpl[0] ? disp_tmpl : nullptr,
-                       i2c_reg_len, i2c_scale);
+                       i2c_reg_len, i2c_scale, neo_co);
 
         /* Restore persisted actuator value for relay/digital_out */
         if (kind == DEV_ACTUATOR_RELAY || kind == DEV_ACTUATOR_DIGITAL) {
@@ -809,6 +835,9 @@ void devicesClear() {
                 ssd1306Deinit(g_devices[i].i2c_addr, col_offset);
             }
             i2cDeinit();
+        }
+        if (g_devices[i].used && g_devices[i].kind == DEV_ACTUATOR_NEOPIXEL) {
+            neopixelDeinit(i);
         }
     }
     memset(g_devices, 0, sizeof(g_devices));
